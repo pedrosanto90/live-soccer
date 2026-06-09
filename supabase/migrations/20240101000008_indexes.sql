@@ -1,0 +1,17 @@
+create index on tournaments (created_by);
+create index on tournaments (slug);
+create index on tournaments (status);
+create index on teams (tournament_id);
+create index on players (team_id);
+create index on tournament_phases (tournament_id, order_index);
+create index on groups (phase_id);
+create index on matches (tournament_id);
+create index on matches (phase_id);
+create index on matches (group_id);
+create index on matches (status);
+create index on matches (home_team_id);
+create index on matches (away_team_id);
+create index on match_events (match_id);
+create index on match_events (match_id, is_cancelled);
+create index on standings (group_id);
+create index on suspensions (player_id, tournament_id);
