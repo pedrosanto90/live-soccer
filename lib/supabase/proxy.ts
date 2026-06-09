@@ -26,7 +26,37 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { pathname } = request.nextUrl
+
+  // Rotas que requerem autenticação
+  const protectedRoutes = ['/dashboard', '/tournaments', '/teams', '/matches', '/profile']
+  // Rotas de auth (redirecionar para dashboard se já autenticado)
+  const authRoutes = ['/login', '/register']
+
+  const isProtectedRoute = protectedRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  )
+  const isAuthRoute = authRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  )
+
+  if (!user && isProtectedRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  if (user && isAuthRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    url.searchParams.delete('redirectTo')
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }
