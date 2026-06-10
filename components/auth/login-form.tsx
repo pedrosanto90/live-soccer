@@ -56,6 +56,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
                   type="email"
                   placeholder="email@exemplo.com"
                   autoComplete="email"
+                  data-testid="email-input"
                   {...field}
                 />
               </FormControl>
@@ -76,6 +77,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     autoComplete="current-password"
+                    data-testid="password-input"
                     {...field}
                   />
                   <button
@@ -97,7 +99,12 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={isPending}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isPending}
+          data-testid="submit-button"
+        >
           {isPending && <Loader2 className="size-4 animate-spin" />}
           Entrar
         </Button>

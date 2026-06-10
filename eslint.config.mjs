@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Artefactos gerados / specs E2E (têm tsconfig + tipos próprios).
+    "coverage/**",
+    "cypress/**",
   ]),
 ]);
 

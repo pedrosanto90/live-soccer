@@ -80,6 +80,7 @@ export function TournamentCard({ tournament }: { tournament: TournamentWithStats
       <div
         role="link"
         tabIndex={0}
+        data-testid="tournament-card"
         onClick={goToOverview}
         onKeyDown={(e) => {
           if (e.key === 'Enter') goToOverview()
@@ -92,7 +93,12 @@ export function TournamentCard({ tournament }: { tournament: TournamentWithStats
           <StatusBadge status={tournament.status} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon" aria-label="Opções do torneio">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Opções do torneio"
+                data-testid="tournament-menu"
+              >
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>

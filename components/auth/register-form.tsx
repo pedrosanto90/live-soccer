@@ -58,7 +58,12 @@ export function RegisterForm() {
             <FormItem>
               <FormLabel>Nome</FormLabel>
               <FormControl>
-                <Input placeholder="O teu nome" autoComplete="name" {...field} />
+                <Input
+                  placeholder="O teu nome"
+                  autoComplete="name"
+                  data-testid="name-input"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -76,6 +81,7 @@ export function RegisterForm() {
                   type="email"
                   placeholder="email@exemplo.com"
                   autoComplete="email"
+                  data-testid="email-input"
                   {...field}
                 />
               </FormControl>
@@ -96,6 +102,7 @@ export function RegisterForm() {
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     autoComplete="new-password"
+                    data-testid="password-input"
                     {...field}
                   />
                   <button
@@ -128,6 +135,7 @@ export function RegisterForm() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   autoComplete="new-password"
+                  data-testid="confirm-password-input"
                   {...field}
                 />
               </FormControl>
@@ -136,7 +144,12 @@ export function RegisterForm() {
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={isPending}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isPending}
+          data-testid="submit-button"
+        >
           {isPending && <Loader2 className="size-4 animate-spin" />}
           Criar conta
         </Button>

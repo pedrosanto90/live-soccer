@@ -4,13 +4,13 @@ import { z } from 'zod'
 // formulários client-side (react-hook-form).
 
 export const signInSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: z.email('Email inválido'),
   password: z.string().min(1, 'Introduz a tua password'),
 })
 
 export const signUpSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
-  email: z.string().email('Email inválido'),
+  email: z.email('Email inválido'),
   password: z.string().min(6, 'A password deve ter pelo menos 6 caracteres'),
 })
 

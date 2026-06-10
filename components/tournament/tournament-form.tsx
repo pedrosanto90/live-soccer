@@ -288,7 +288,11 @@ export function TournamentForm({
                   <FormItem>
                     <FormLabel>Nome</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex.: Torneio de Verão" {...field} />
+                      <Input
+                        placeholder="Ex.: Torneio de Verão"
+                        data-testid="tournament-name"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -305,6 +309,7 @@ export function TournamentForm({
                       <Textarea
                         rows={3}
                         placeholder="Descrição opcional do torneio."
+                        data-testid="tournament-description"
                         {...field}
                         value={field.value ?? ''}
                       />
@@ -492,7 +497,7 @@ export function TournamentForm({
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending} data-testid="submit-button">
               {isPending && <Loader2 className="size-4 animate-spin" />}
               {isPending
                 ? 'A guardar...'

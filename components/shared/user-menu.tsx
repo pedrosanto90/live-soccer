@@ -34,7 +34,11 @@ export function UserMenu({ profile }: { profile: Profile | null }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="flex h-auto items-center gap-2 px-2 py-1">
+        <Button
+          variant="ghost"
+          className="flex h-auto items-center gap-2 px-2 py-1"
+          data-testid="user-menu-trigger"
+        >
           <Avatar className="size-7">
             {profile.avatar_url ? (
               <AvatarImage src={profile.avatar_url} alt={name} />
