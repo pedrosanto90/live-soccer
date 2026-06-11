@@ -2,8 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { getEffectiveSettings } from '@/lib/utils'
 import type {
   Match,
+  MatchEvent,
   MatchStatus,
+  PenaltyKick,
   PhaseType,
+  Player,
   TournamentSettings,
 } from '@/types/database'
 
@@ -179,4 +182,42 @@ export async function getRefereesByTournament(
     .map((r) => r.referees)
     .filter((r): r is MatchRefereeLite => r != null)
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+}
+
+export type MatchPlayerLite = Pick<Player, 'id' | 'name' | 'number'>
+
+// Eventos de um jogo, mais recentes primeiro (inclui os cancelados — o cliente
+// filtra conforme o contexto).
+export async function getMatchEvents(matchId: string): Promise<MatchEvent[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('match_events')
+    .select('*')
+    .eq('match_id', matchId)
+    .order('created_at', { ascending: false })
+  return (data as MatchEvent[] | null) ?? []
+}
+
+// Pontapés da série de penáltis, pela ordem em que foram marcados.
+export async function getMatchPenalties(matchId: string): Promise<PenaltyKick[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('penalty_kicks')
+    .select('*')
+    .eq('match_id', matchId)
+    .order('created_at', { ascending: true })
+  return (data as PenaltyKick[] | null) ?? []
+}
+
+// Jogadores activos de uma equipa, ordenados por número (nulls no fim) e nome.
+export async function getActivePlayers(teamId: string): Promise<MatchPlayerLite[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('players')
+    .select('id, name, number')
+    .eq('team_id', teamId)
+    .eq('is_active', true)
+    .order('number', { ascending: true, nullsFirst: false })
+    .order('name', { ascending: true })
+  return (data as MatchPlayerLite[] | null) ?? []
 }

@@ -1,15 +1,20 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ExternalLink, MapPin, Pencil } from 'lucide-react'
+import { MapPin, Pencil } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
-import { getMatchById } from '@/lib/queries/matches'
+import {
+  getActivePlayers,
+  getMatchById,
+  getMatchEvents,
+  getMatchPenalties,
+} from '@/lib/queries/matches'
 import { formatMatchDate } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Section } from '@/components/ui/section'
-import { StatusBadge } from '@/components/ui/status-badge'
-import { TeamAvatar } from '@/components/match/team-avatar'
+import { MatchProvider } from '@/contexts/match-context'
+import { MatchAdminPanel } from '@/components/match/match-admin-panel'
 
 export const metadata: Metadata = {
   title: 'Jogo · Live Soccer',
@@ -43,6 +48,13 @@ export default async function MatchDetailPage({
     isAdmin = membership?.role === 'admin' || membership?.role === 'operator'
   }
 
+  const [events, penalties, homePlayers, awayPlayers] = await Promise.all([
+    getMatchEvents(matchId),
+    getMatchPenalties(matchId),
+    getActivePlayers(match.home_team_id),
+    getActivePlayers(match.away_team_id),
+  ])
+
   const { match: settings } = match.effective_settings
   const isCustom = match.settings_override != null
   const base = `/tournaments/${tournamentId}/matches/${matchId}`
@@ -59,7 +71,6 @@ export default async function MatchDetailPage({
             {match.home_team.name} vs {match.away_team.name}
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <StatusBadge status={match.status} />
             {match.scheduled_at ? (
               <p className="text-sm text-muted-foreground">
                 {formatMatchDate(match.scheduled_at)}
@@ -74,60 +85,30 @@ export default async function MatchDetailPage({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a
-              href={`/match/${match.id}/public`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLink className="size-3.5" />
-              Painel público
-            </a>
-          </Button>
-          {match.status === 'scheduled' && isAdmin ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`${base}/edit`}>
-                <Pencil className="size-3.5" />
-                Editar
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-8">
-        <div className="grid grid-cols-3 items-center gap-4">
-          <div className="flex flex-col items-center gap-3">
-            <TeamAvatar team={match.home_team} className="size-14 text-lg" />
-            <p className="text-center text-sm font-medium">{match.home_team.name}</p>
-          </div>
-
-          <div className="flex flex-col items-center gap-2">
-            {match.status === 'scheduled' ? (
-              <p className="text-4xl font-medium text-muted-foreground">vs</p>
-            ) : (
-              <p className="text-5xl font-medium tabular-nums">
-                {match.home_score} — {match.away_score}
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-col items-center gap-3">
-            <TeamAvatar team={match.away_team} className="size-14 text-lg" />
-            <p className="text-center text-sm font-medium">{match.away_team.name}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-lg border border-border bg-surface-2 p-6">
-        <p className="text-sm text-muted-foreground">
-          O painel de administração do jogo será implementado em breve.
-        </p>
         {match.status === 'scheduled' && isAdmin ? (
-          <Button disabled>Iniciar jogo</Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`${base}/edit`}>
+              <Pencil className="size-3.5" />
+              Editar
+            </Link>
+          </Button>
         ) : null}
       </div>
+
+      <MatchProvider
+        initialMatch={match}
+        initialEvents={events}
+        initialPenalties={penalties}
+      >
+        <MatchAdminPanel
+          homeTeam={match.home_team}
+          awayTeam={match.away_team}
+          players={{ home: homePlayers, away: awayPlayers }}
+          settings={match.effective_settings}
+          isAdmin={isAdmin}
+          publicHref={`/match/${match.id}/public`}
+        />
+      </MatchProvider>
 
       <Section
         title="Configurações do jogo"
@@ -152,7 +133,10 @@ export default async function MatchDetailPage({
             label="Prolongamento"
             value={`${settings.extra_time_duration_minutes} min`}
           />
-          <SettingItem label="Máx. faltas / parte" value={settings.max_fouls_per_team_per_half} />
+          <SettingItem
+            label="Máx. faltas / parte"
+            value={settings.max_fouls_per_team_per_half}
+          />
           <SettingItem label="Penáltis (séries)" value={settings.penalty_shootout_kicks} />
         </div>
       </Section>

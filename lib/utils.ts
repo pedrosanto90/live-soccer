@@ -2,7 +2,13 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import slugify from "slugify"
 
-import type { TournamentSettings, TiebreakerCriterion, Match } from "@/types/database"
+import type {
+  TournamentSettings,
+  TiebreakerCriterion,
+  Match,
+  MatchPeriod,
+  PenaltyKick,
+} from "@/types/database"
 import { tiebreakCriterions, type TournamentInput } from "@/lib/validations/tournament"
 
 export function cn(...inputs: ClassValue[]) {
@@ -120,6 +126,133 @@ export function getMatchResult(
   if (home > away) return "home"
   if (away > home) return "away"
   return "draw"
+}
+
+// ---------------------------------------------------------------------------
+// Painel de jogo ao vivo
+// ---------------------------------------------------------------------------
+
+// Faltas acumuladas de uma equipa na parte actual. Cada parte tem o seu próprio
+// contador (as faltas reiniciam ao início de cada parte). O prolongamento
+// (extra_first/extra_second) partilha o mesmo contador.
+export function getCurrentFouls(
+  match: Match,
+  side: "home" | "away",
+  period: MatchPeriod | null
+): number {
+  switch (period) {
+    case "first_half":
+      return side === "home" ? match.home_fouls_h1 : match.away_fouls_h1
+    case "second_half":
+      return side === "home" ? match.home_fouls_h2 : match.away_fouls_h2
+    case "extra_first":
+    case "extra_second":
+      return side === "home" ? match.home_fouls_extra : match.away_fouls_extra
+    default:
+      return 0
+  }
+}
+
+// Coluna de faltas correspondente a uma parte/lado — usada pelas Server Actions
+// para incrementar/decrementar o contador certo.
+export function foulsColumn(
+  side: "home" | "away",
+  period: MatchPeriod | null
+): keyof Match | null {
+  switch (period) {
+    case "first_half":
+      return side === "home" ? "home_fouls_h1" : "away_fouls_h1"
+    case "second_half":
+      return side === "home" ? "home_fouls_h2" : "away_fouls_h2"
+    case "extra_first":
+    case "extra_second":
+      return side === "home" ? "home_fouls_extra" : "away_fouls_extra"
+    default:
+      return null
+  }
+}
+
+// Etiqueta legível da parte actual.
+export function getPeriodLabel(period: MatchPeriod | null): string {
+  switch (period) {
+    case "first_half":
+      return "1.ª parte"
+    case "second_half":
+      return "2.ª parte"
+    case "extra_first":
+      return "1.ª parte extra"
+    case "extra_second":
+      return "2.ª parte extra"
+    case "penalties":
+      return "Penáltis"
+    default:
+      return ""
+  }
+}
+
+// Minuto de jogo de um evento (arredondado para cima, nunca abaixo de 1).
+export function formatEventTime(elapsedSecs: number): string {
+  const minute = Math.ceil(elapsedSecs / 60)
+  return String(minute <= 0 ? 1 : minute)
+}
+
+// Determina a próxima equipa a marcar e a ordem do pontapé numa série de
+// penáltis. Alterna casa/fora começando pela casa; a ordem incrementa a cada
+// par de pontapés.
+export function getNextPenaltyKick(
+  kicks: PenaltyKick[],
+  homeTeamId: string,
+  awayTeamId: string
+): { teamId: string; kickOrder: number } {
+  const homeCount = kicks.filter((k) => k.team_id === homeTeamId).length
+  const awayCount = kicks.filter((k) => k.team_id === awayTeamId).length
+
+  // A casa bate primeiro em cada ronda: se já bateu mais (ou igual) à frente,
+  // é a vez da equipa de fora.
+  if (homeCount <= awayCount) {
+    return { teamId: homeTeamId, kickOrder: homeCount + 1 }
+  }
+  return { teamId: awayTeamId, kickOrder: awayCount + 1 }
+}
+
+// Detecta o fim de uma série de penáltis: ou ambas as equipas completaram a
+// série regular, ou uma já não pode ser alcançada (vencedor antecipado).
+export function isPenaltySeriesComplete(
+  kicks: PenaltyKick[],
+  totalKicks: number
+): boolean {
+  const counts = kicks.reduce(
+    (acc, k) => {
+      const scored = k.scored ? 1 : 0
+      if (acc.byTeam[k.team_id] === undefined) {
+        acc.byTeam[k.team_id] = { taken: 0, scored: 0 }
+      }
+      acc.byTeam[k.team_id].taken += 1
+      acc.byTeam[k.team_id].scored += scored
+      return acc
+    },
+    { byTeam: {} as Record<string, { taken: number; scored: number }> }
+  )
+
+  const teams = Object.values(counts.byTeam)
+  if (teams.length < 2) return false
+
+  const [a, b] = teams
+
+  // Vencedor antecipado: a diferença de golos já não pode ser recuperada com os
+  // pontapés que faltam a cada equipa dentro da série regular.
+  const aRemaining = Math.max(0, totalKicks - a.taken)
+  const bRemaining = Math.max(0, totalKicks - b.taken)
+  if (a.scored > b.scored + bRemaining) return true
+  if (b.scored > a.scored + aRemaining) return true
+
+  // Série regular completa (cada equipa bateu `totalKicks`).
+  const regularDone = a.taken >= totalKicks && b.taken >= totalKicks
+  if (!regularDone) return false
+
+  // Em caso de empate após a série regular, continua-se (morte súbita): só
+  // termina quando, com o mesmo número de pontapés, há diferença de golos.
+  return a.taken === b.taken && a.scored !== b.scored
 }
 
 // Faz o merge profundo das configurações do torneio com o override do jogo.

@@ -255,4 +255,19 @@
     background: var(--border);
     border-radius: 2px;
   }
+
+  /* Cronómetro a piscar quando o tempo da parte se esgota (00:00). */
+  .animate-blink {
+    animation: blink 1s step-end infinite;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
