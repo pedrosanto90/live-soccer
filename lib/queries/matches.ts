@@ -85,6 +85,10 @@ export async function getMatchesByTournament(
     .from('matches')
     .select(MATCH_SELECT)
     .eq('tournament_id', tournamentId)
+    // Jogos de bracket vivem na vista de eliminatórias, não na lista plana de
+    // jogos — e podem ter equipas a null ("A definir"), que as linhas de jogo
+    // não sabem renderizar. Excluímo-los aqui.
+    .is('bracket_round', null)
 
   if (filters?.phase_id) query = query.eq('phase_id', filters.phase_id)
   if (filters?.group_id) query = query.eq('group_id', filters.group_id)

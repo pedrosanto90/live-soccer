@@ -11,6 +11,7 @@ import { StatCard } from '@/components/ui/stat-card'
 import { Section } from '@/components/ui/section'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ActivateTournamentButton } from '@/components/tournament/activate-tournament-button'
+import { TournamentShare } from '@/components/tournament/tournament-share'
 
 export const metadata: Metadata = {
   title: 'Torneio · Live Soccer',
@@ -55,6 +56,9 @@ export default async function TournamentOverviewPage({
       >
         {isAdmin ? (
           <>
+            {tournament.visibility === 'public' ? (
+              <TournamentShare slug={tournament.slug} />
+            ) : null}
             <Button variant="outline" asChild>
               <Link href={`/tournaments/${tournamentId}/edit`}>Editar</Link>
             </Button>

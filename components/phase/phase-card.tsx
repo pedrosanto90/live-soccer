@@ -40,6 +40,7 @@ import {
 import { PhaseDialog } from '@/components/phase/phase-dialog'
 import { DrawPanel } from '@/components/phase/draw-panel'
 import { GroupsGrid } from '@/components/phase/groups-grid'
+import { KnockoutSection } from '@/components/bracket/knockout-section'
 
 interface PhaseCardProps {
   phase: PhaseWithGroups
@@ -207,10 +208,11 @@ export function PhaseCard({ phase, tournamentId, isAdmin, teams }: PhaseCardProp
             </p>
           )
         ) : (
-          // Bracket de eliminatórias — placeholder por agora.
-          <p className="border-t border-border p-4 text-sm text-muted-foreground">
-            O quadro de eliminatórias é preenchido após a fase de grupos.
-          </p>
+          <KnockoutSection
+            phaseId={phase.id}
+            tournamentId={tournamentId}
+            isAdmin={isAdmin}
+          />
         )
       ) : null}
 

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { foulsColumn } from '@/lib/utils'
 import { updateStandings } from '@/lib/actions/standings'
+import { advanceWinner } from '@/lib/actions/bracket'
 import type { ActionResult } from '@/types'
 import type {
   EventType,
@@ -317,6 +318,12 @@ export async function finishMatch(
   if (!result.success) return result
 
   await updateStandings(matchId)
+
+  // Jogo de eliminatórias: propaga o vencedor para o jogo seguinte do bracket.
+  if (result.data.bracket_round != null) {
+    await advanceWinner(matchId)
+  }
+
   revalidateMatch(result.data)
   revalidatePath(`/tournaments/${result.data.tournament_id}/matches`)
   return result

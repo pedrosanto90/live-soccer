@@ -64,8 +64,8 @@ export default async function EditMatchPage({
   const defaultValues: Partial<MatchInput> = {
     phase_id: match.phase_id,
     group_id: match.group_id,
-    home_team_id: match.home_team_id,
-    away_team_id: match.away_team_id,
+    home_team_id: match.home_team_id ?? undefined,
+    away_team_id: match.away_team_id ?? undefined,
     referee_id: match.referee_id,
     venue: match.venue,
     scheduled_at: match.scheduled_at,

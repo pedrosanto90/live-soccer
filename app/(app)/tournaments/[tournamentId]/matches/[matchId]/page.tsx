@@ -51,8 +51,8 @@ export default async function MatchDetailPage({
   const [events, penalties, homePlayers, awayPlayers] = await Promise.all([
     getMatchEvents(matchId),
     getMatchPenalties(matchId),
-    getActivePlayers(match.home_team_id),
-    getActivePlayers(match.away_team_id),
+    getActivePlayers(match.home_team_id ?? ''),
+    getActivePlayers(match.away_team_id ?? ''),
   ])
 
   const { match: settings } = match.effective_settings

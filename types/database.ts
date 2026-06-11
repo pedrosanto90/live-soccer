@@ -356,12 +356,16 @@ export interface Database {
           tournament_id: string
           phase_id: string
           group_id: string | null
-          home_team_id: string
-          away_team_id: string
+          home_team_id: string | null
+          away_team_id: string | null
           referee_id: string | null
           venue: string | null
           scheduled_at: string | null
           status: MatchStatus
+          bracket_round: number | null
+          bracket_position: number | null
+          next_match_id: string | null
+          next_match_slot: 'home' | 'away' | null
           current_period: MatchPeriod | null
           home_score: number
           away_score: number
@@ -388,12 +392,16 @@ export interface Database {
           tournament_id: string
           phase_id: string
           group_id?: string | null
-          home_team_id: string
-          away_team_id: string
+          home_team_id?: string | null
+          away_team_id?: string | null
           referee_id?: string | null
           venue?: string | null
           scheduled_at?: string | null
           status?: MatchStatus
+          bracket_round?: number | null
+          bracket_position?: number | null
+          next_match_id?: string | null
+          next_match_slot?: 'home' | 'away' | null
           current_period?: MatchPeriod | null
           home_score?: number
           away_score?: number
@@ -420,12 +428,16 @@ export interface Database {
           tournament_id?: string
           phase_id?: string
           group_id?: string | null
-          home_team_id?: string
-          away_team_id?: string
+          home_team_id?: string | null
+          away_team_id?: string | null
           referee_id?: string | null
           venue?: string | null
           scheduled_at?: string | null
           status?: MatchStatus
+          bracket_round?: number | null
+          bracket_position?: number | null
+          next_match_id?: string | null
+          next_match_slot?: 'home' | 'away' | null
           current_period?: MatchPeriod | null
           home_score?: number
           away_score?: number

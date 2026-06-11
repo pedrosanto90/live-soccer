@@ -54,9 +54,12 @@ export function useTimer(halfDurationSecs: number, matchId: string): UseTimerRet
   }, [timerRunning, matchId, dispatch])
 
   const remaining = Math.max(0, halfDurationSecs - elapsedSecs)
+  // O tempo decorrido apresentado pára no tempo definido — tal como o restante
+  // pára em 00:00. O `elapsedSecs` cru continua a ser sincronizado com a BD.
+  const displayElapsed = Math.min(elapsedSecs, halfDurationSecs)
 
   return {
-    displayTime: formatTime(elapsedSecs),
+    displayTime: formatTime(displayElapsed),
     remainingTime: formatTime(remaining),
     isOvertime: elapsedSecs > halfDurationSecs,
     isTimeUp: remaining <= 0,
