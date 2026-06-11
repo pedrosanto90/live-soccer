@@ -4,6 +4,9 @@ import {
   generateSlug,
   buildTournamentSettings,
   parseTournamentSettings,
+  formatMatchDate,
+  getMatchResult,
+  getEffectiveSettings,
 } from '@/lib/utils'
 import type { TournamentInput } from '@/lib/validations/tournament'
 
@@ -79,5 +82,107 @@ describe('parseTournamentSettings', () => {
       tiebreak_order: ['goal_difference', 'points', 'draw'],
     })
     expect(parsed.tiebreak_order).toEqual(['goal_difference', 'points', 'draw'])
+  })
+})
+
+describe('formatMatchDate', () => {
+  it('formata data e hora correctamente', () => {
+    const result = formatMatchDate('2025-06-14T15:30:00')
+    expect(result).toMatch(/14/) // dia
+    expect(result).toMatch(/15:30/) // hora
+  })
+  it('retorna string vazia para input inválido', () => {
+    expect(formatMatchDate('')).toBe('')
+    expect(formatMatchDate('não-é-data')).toBe('')
+  })
+})
+
+describe('getMatchResult', () => {
+  it('retorna home quando equipa da casa ganha', () => {
+    expect(
+      getMatchResult({
+        home_score: 2,
+        away_score: 1,
+        home_score_extra: 0,
+        away_score_extra: 0,
+        status: 'finished',
+      })
+    ).toBe('home')
+  })
+  it('retorna away quando equipa de fora ganha', () => {
+    expect(
+      getMatchResult({
+        home_score: 0,
+        away_score: 2,
+        home_score_extra: 0,
+        away_score_extra: 0,
+        status: 'finished',
+      })
+    ).toBe('away')
+  })
+  it('retorna draw quando empatado', () => {
+    expect(
+      getMatchResult({
+        home_score: 1,
+        away_score: 1,
+        home_score_extra: 0,
+        away_score_extra: 0,
+        status: 'finished',
+      })
+    ).toBe('draw')
+  })
+  it('considera os golos do prolongamento', () => {
+    expect(
+      getMatchResult({
+        home_score: 1,
+        away_score: 1,
+        home_score_extra: 1,
+        away_score_extra: 0,
+        status: 'finished',
+      })
+    ).toBe('home')
+  })
+  it('retorna null quando jogo não terminado', () => {
+    expect(
+      getMatchResult({
+        home_score: 0,
+        away_score: 0,
+        home_score_extra: 0,
+        away_score_extra: 0,
+        status: 'scheduled',
+      })
+    ).toBeNull()
+  })
+})
+
+describe('getEffectiveSettings', () => {
+  const base = {
+    match: {
+      half_duration_minutes: 20,
+      half_time_duration_minutes: 5,
+      extra_time_duration_minutes: 5,
+      max_fouls_per_team_per_half: 5,
+      penalty_shootout_kicks: 5,
+    },
+    scoring: { points_win: 3, points_draw: 1, points_loss: 0 },
+    cards: { yellow_cards_for_suspension: 3, red_card_suspension_matches: 1 },
+    tiebreak_order: ['points', 'goal_difference', 'draw'] as const,
+  }
+
+  it('usa os valores do torneio quando não há override', () => {
+    const settings = getEffectiveSettings({
+      ...base,
+      tiebreak_order: [...base.tiebreak_order],
+    })
+    expect(settings.match.half_duration_minutes).toBe(20)
+  })
+
+  it('sobrepõe apenas os campos do override', () => {
+    const settings = getEffectiveSettings(
+      { ...base, tiebreak_order: [...base.tiebreak_order] },
+      { match: { ...base.match, max_fouls_per_team_per_half: 6 } }
+    )
+    expect(settings.match.half_duration_minutes).toBe(20)
+    expect(settings.match.max_fouls_per_team_per_half).toBe(6)
   })
 })

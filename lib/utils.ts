@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import slugify from "slugify"
 
-import type { TournamentSettings, TiebreakerCriterion } from "@/types/database"
+import type { TournamentSettings, TiebreakerCriterion, Match } from "@/types/database"
 import { tiebreakCriterions, type TournamentInput } from "@/lib/validations/tournament"
 
 export function cn(...inputs: ClassValue[]) {
@@ -77,5 +77,63 @@ export function buildTournamentSettings(
     scoring: values.scoring,
     cards: values.cards,
     tiebreak_order: values.tiebreak_order,
+  }
+}
+
+// Formata a data/hora de um jogo para pt-PT: "sáb., 14 jun. · 15:30".
+export function formatMatchDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return ""
+  const parts = new Intl.DateTimeFormat("pt-PT", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date)
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? ""
+
+  const day = `${get("weekday")}, ${get("day")} ${get("month")}`
+  const time = `${get("hour")}:${get("minute")}`
+  return `${day} · ${time}`
+}
+
+// Resultado de um jogo terminado, considerando golos normais + prolongamento
+// (os penáltis não contam para a classificação). Devolve null se não terminou.
+export function getMatchResult(
+  match: Pick<
+    Match,
+    | "status"
+    | "home_score"
+    | "away_score"
+    | "home_score_extra"
+    | "away_score_extra"
+  >
+): "home" | "away" | "draw" | null {
+  if (match.status !== "finished") return null
+
+  const home = match.home_score + (match.home_score_extra ?? 0)
+  const away = match.away_score + (match.away_score_extra ?? 0)
+
+  if (home > away) return "home"
+  if (away > home) return "away"
+  return "draw"
+}
+
+// Faz o merge profundo das configurações do torneio com o override do jogo.
+// Só as chaves presentes no override sobrepõem as do torneio.
+export function getEffectiveSettings(
+  tournamentSettings: TournamentSettings,
+  override?: Partial<TournamentSettings> | null
+): TournamentSettings {
+  if (!override) return tournamentSettings
+
+  return {
+    match: { ...tournamentSettings.match, ...override.match },
+    scoring: { ...tournamentSettings.scoring, ...override.scoring },
+    cards: { ...tournamentSettings.cards, ...override.cards },
+    tiebreak_order: override.tiebreak_order ?? tournamentSettings.tiebreak_order,
   }
 }

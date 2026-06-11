@@ -1,0 +1,182 @@
+import { createClient } from '@/lib/supabase/server'
+import { getEffectiveSettings } from '@/lib/utils'
+import type {
+  Match,
+  MatchStatus,
+  PhaseType,
+  TournamentSettings,
+} from '@/types/database'
+
+// ---------------------------------------------------------------------------
+// Tipos
+// ---------------------------------------------------------------------------
+
+export interface MatchTeamLite {
+  id: string
+  name: string
+  short_name: string | null
+  color_primary: string
+  color_secondary: string
+}
+
+export interface MatchPhaseLite {
+  id: string
+  name: string
+  type: PhaseType
+}
+
+export interface MatchGroupLite {
+  id: string
+  name: string
+}
+
+export interface MatchRefereeLite {
+  id: string
+  name: string
+}
+
+export interface MatchWithRelations extends Match {
+  home_team: MatchTeamLite
+  away_team: MatchTeamLite
+  phase: MatchPhaseLite
+  group: MatchGroupLite | null
+  referee: MatchRefereeLite | null
+}
+
+export interface MatchDetail extends MatchWithRelations {
+  tournament: { id: string; name: string; settings: TournamentSettings }
+  // settings do torneio com o settings_override do jogo aplicado por cima.
+  effective_settings: TournamentSettings
+}
+
+export interface MatchFilters {
+  phase_id?: string
+  group_id?: string
+  status?: MatchStatus | MatchStatus[]
+}
+
+// Dois FKs apontam para `teams` (casa/fora), por isso os embeds são
+// desambiguados pelo nome da constraint (`matches_<coluna>_fkey`).
+const MATCH_SELECT = `
+  *,
+  home_team:teams!matches_home_team_id_fkey(id, name, short_name, color_primary, color_secondary),
+  away_team:teams!matches_away_team_id_fkey(id, name, short_name, color_primary, color_secondary),
+  phase:tournament_phases(id, name, type),
+  group:groups(id, name),
+  referee:referees(id, name)
+`
+
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
+// Jogos de um torneio com as relações desnormalizadas, ordenados por data
+// (sem data no fim) e depois por ordem de criação. O RLS garante o acesso.
+export async function getMatchesByTournament(
+  tournamentId: string,
+  filters?: MatchFilters
+): Promise<MatchWithRelations[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('matches')
+    .select(MATCH_SELECT)
+    .eq('tournament_id', tournamentId)
+
+  if (filters?.phase_id) query = query.eq('phase_id', filters.phase_id)
+  if (filters?.group_id) query = query.eq('group_id', filters.group_id)
+  if (filters?.status) {
+    query = Array.isArray(filters.status)
+      ? query.in('status', filters.status)
+      : query.eq('status', filters.status)
+  }
+
+  const { data, error } = await query
+    .order('scheduled_at', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (error || !data) return []
+
+  return data as unknown as MatchWithRelations[]
+}
+
+// Um jogo por id, com todas as relações e as settings efectivas (merge das
+// settings do torneio com o settings_override do jogo).
+export async function getMatchById(matchId: string): Promise<MatchDetail | null> {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('matches')
+    .select(
+      `${MATCH_SELECT}, tournament:tournaments(id, name, settings)`
+    )
+    .eq('id', matchId)
+    .maybeSingle()
+
+  if (!data) return null
+
+  const match = data as unknown as MatchWithRelations & {
+    tournament: { id: string; name: string; settings: TournamentSettings }
+  }
+
+  return {
+    ...match,
+    effective_settings: getEffectiveSettings(
+      match.tournament.settings,
+      match.settings_override
+    ),
+  }
+}
+
+export interface PhaseMatchGroup {
+  group: MatchGroupLite | null
+  matches: MatchWithRelations[]
+}
+
+// Todos os jogos de uma fase, agrupados por grupo (jogos sem grupo no fim).
+export async function getMatchesByPhase(
+  phaseId: string
+): Promise<PhaseMatchGroup[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('matches')
+    .select(MATCH_SELECT)
+    .eq('phase_id', phaseId)
+    .order('scheduled_at', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (error || !data) return []
+
+  const matches = data as unknown as MatchWithRelations[]
+
+  const groups = new Map<string, PhaseMatchGroup>()
+  for (const match of matches) {
+    const key = match.group?.id ?? '__none__'
+    if (!groups.has(key)) {
+      groups.set(key, { group: match.group, matches: [] })
+    }
+    groups.get(key)!.matches.push(match)
+  }
+
+  return [...groups.values()]
+}
+
+// Árbitros associados a um torneio, ordenados por nome.
+export async function getRefereesByTournament(
+  tournamentId: string
+): Promise<MatchRefereeLite[]> {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('tournament_referees')
+    .select('referees(id, name)')
+    .eq('tournament_id', tournamentId)
+
+  if (!data) return []
+
+  return (data as unknown as { referees: MatchRefereeLite | null }[])
+    .map((r) => r.referees)
+    .filter((r): r is MatchRefereeLite => r != null)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+}
