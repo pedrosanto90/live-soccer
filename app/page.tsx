@@ -1,42 +1,100 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Trophy } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
+import { getPublicTournaments } from '@/lib/queries/tournaments'
+import { parseTournamentFilters } from '@/lib/validations/tournament-search'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { HomeNavbar } from '@/components/shared/home-navbar'
+import { TournamentSearch } from '@/components/home/tournament-search'
+import { PublicTournamentCard } from '@/components/home/public-tournament-card'
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const filters = parseTournamentFilters(params)
+
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (user) {
-    redirect('/dashboard')
-  }
+  const [tournaments, profile] = await Promise.all([
+    getPublicTournaments(filters),
+    user
+      ? supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+          .then(({ data }) => data)
+      : Promise.resolve(null),
+  ])
+
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      filters.status ||
+      filters.starts_after ||
+      filters.starts_before
+  )
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-8 bg-background px-4 text-center">
-      <div className="flex flex-col items-center gap-5">
-        <span className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Trophy className="size-6" />
-        </span>
-        <div className="flex flex-col items-center gap-2">
-          <h1 className="text-4xl font-medium tracking-tight">Live Soccer</h1>
-          <p className="max-w-md text-lg text-muted-foreground text-balance">
-            Gere os teus torneios de futebol de forma simples e profissional.
+    <div className="min-h-svh bg-background">
+      <HomeNavbar profile={profile} />
+
+      <main className="mx-auto w-full max-w-4xl px-4 py-10">
+        {/* Hero */}
+        <div className="mb-10 text-center">
+          <h1 className="text-3xl font-medium tracking-tight">
+            Torneios de Futebol
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Acompanha resultados, classificações e jogos em tempo real.
           </p>
         </div>
-      </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button size="lg" asChild>
-          <Link href="/register">Começar agora</Link>
-        </Button>
-        <Button size="lg" variant="outline" asChild>
-          <Link href="/login">Entrar</Link>
-        </Button>
-      </div>
+        {/* Pesquisa e filtros */}
+        <TournamentSearch initialFilters={filters} />
+
+        {/* Contador de resultados */}
+        <p className="mb-4 text-xs text-muted-foreground">
+          {tournaments.length} torneio(s) encontrado(s)
+          {hasActiveFilters && ' para os filtros seleccionados'}
+        </p>
+
+        {/* Listagem */}
+        {tournaments.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {tournaments.map((tournament) => (
+              <PublicTournamentCard
+                key={tournament.id}
+                tournament={tournament}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={<Trophy />}
+            title="Nenhum torneio encontrado"
+            description={
+              hasActiveFilters
+                ? 'Tenta ajustar os filtros de pesquisa.'
+                : 'Ainda não há torneios públicos disponíveis.'
+            }
+            action={
+              hasActiveFilters ? (
+                <Button variant="outline" asChild>
+                  <Link href="/">Limpar filtros</Link>
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
+      </main>
     </div>
   )
 }

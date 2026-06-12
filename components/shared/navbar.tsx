@@ -9,11 +9,7 @@ import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { UserMenu } from '@/components/shared/user-menu'
 
-const navLinks = [
-  { href: '/tournaments', label: 'Torneios' },
-  { href: '/teams', label: 'Equipas' },
-  { href: '/matches', label: 'Jogos' },
-]
+const navLinks = [{ href: '/dashboard', label: 'Dashboard' }]
 
 export function Navbar({ user }: { user: Profile | null }) {
   const pathname = usePathname()
@@ -22,7 +18,7 @@ export function Navbar({ user }: { user: Profile | null }) {
     <header className="border-b bg-background">
       <nav className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
         {/* Esquerda — logo + nome */}
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Trophy className="size-4" />
           </span>

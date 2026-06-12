@@ -185,3 +185,169 @@ describe('togglePlayerActive action', () => {
     expect(result).toEqual({ success: true, data: { is_active: false } })
   })
 })
+
+const validPlayer = {
+  name: 'João Silva',
+  number: 10,
+  position: 'forward',
+  is_active: true,
+} as const
+
+const mockPlayer = {
+  id: 'player-123',
+  team_id: 'team-123',
+  name: 'João Silva',
+  number: 10,
+  position: 'forward',
+  is_active: true,
+}
+
+describe('createPlayer action', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejeita input inválido sem tocar na base de dados', async () => {
+    const { createPlayer } = await import('@/lib/actions/teams')
+    const result = await createPlayer('team-123', { ...validPlayer, name: 'A' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejeita quando não está autenticado', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({ user: null }) as never
+    )
+    const { createPlayer } = await import('@/lib/actions/teams')
+    const result = await createPlayer('team-123', validPlayer)
+    expect(result).toEqual({
+      success: false,
+      error: 'Sessão expirada. Inicia sessão novamente.',
+    })
+  })
+
+  it('rejeita quando a equipa não existe', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({ user: mockUser, maybeSingle: { data: null } }) as never
+    )
+    const { createPlayer } = await import('@/lib/actions/teams')
+    const result = await createPlayer('team-123', validPlayer)
+    expect(result).toEqual({ success: false, error: 'Equipa não encontrada.' })
+  })
+
+  it('rejeita quando o utilizador não tem permissão', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({
+        user: mockUser,
+        maybeSingleSeq: [
+          { data: { tournament_id: 'tournament-123' } },
+          { data: { role: 'viewer' } },
+        ],
+      }) as never
+    )
+    const { createPlayer } = await import('@/lib/actions/teams')
+    const result = await createPlayer('team-123', validPlayer)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejeita quando o número já está em uso', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({
+        user: mockUser,
+        maybeSingleSeq: [
+          { data: { tournament_id: 'tournament-123' } },
+          { data: { role: 'admin' } },
+          { data: { id: 'outro' } },
+        ],
+      }) as never
+    )
+    const { createPlayer } = await import('@/lib/actions/teams')
+    const result = await createPlayer('team-123', validPlayer)
+    expect(result).toEqual({
+      success: false,
+      error: 'Já existe um jogador com esse número.',
+    })
+  })
+
+  it('cria o jogador com sucesso', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({
+        user: mockUser,
+        maybeSingleSeq: [
+          { data: { tournament_id: 'tournament-123' } },
+          { data: { role: 'admin' } },
+          { data: null },
+        ],
+        single: { data: mockPlayer, error: null },
+      }) as never
+    )
+    const { createPlayer } = await import('@/lib/actions/teams')
+    const result = await createPlayer('team-123', validPlayer)
+    expect(result).toEqual({ success: true, data: mockPlayer })
+  })
+})
+
+describe('updatePlayer action', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejeita quando o jogador não existe', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({ user: mockUser, maybeSingle: { data: null } }) as never
+    )
+    const { updatePlayer } = await import('@/lib/actions/teams')
+    const result = await updatePlayer('player-123', validPlayer)
+    expect(result).toEqual({ success: false, error: 'Jogador não encontrado.' })
+  })
+
+  it('actualiza o jogador com sucesso', async () => {
+    const updated = { ...mockPlayer, name: 'Rui' }
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({
+        user: mockUser,
+        // player (team_id), tournamentIdOfTeam, membership, clash (null)
+        maybeSingleSeq: [
+          { data: { team_id: 'team-123' } },
+          { data: { tournament_id: 'tournament-123' } },
+          { data: { role: 'operator' } },
+          { data: null },
+        ],
+        single: { data: updated, error: null },
+      }) as never
+    )
+    const { updatePlayer } = await import('@/lib/actions/teams')
+    const result = await updatePlayer('player-123', { ...validPlayer, name: 'Rui' })
+    expect(result).toEqual({ success: true, data: updated })
+  })
+})
+
+describe('deletePlayer action', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejeita quando o jogador não existe', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({ user: mockUser, maybeSingle: { data: null } }) as never
+    )
+    const { deletePlayer } = await import('@/lib/actions/teams')
+    const result = await deletePlayer('player-123')
+    expect(result).toEqual({ success: false, error: 'Jogador não encontrado.' })
+  })
+
+  it('remove o jogador com sucesso', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeSupabaseMock({
+        user: mockUser,
+        maybeSingleSeq: [
+          { data: { team_id: 'team-123' } },
+          { data: { tournament_id: 'tournament-123' } },
+          { data: { role: 'admin' } },
+        ],
+      }) as never
+    )
+    const { deletePlayer } = await import('@/lib/actions/teams')
+    const result = await deletePlayer('player-123')
+    expect(result).toEqual({ success: true, data: undefined })
+  })
+})

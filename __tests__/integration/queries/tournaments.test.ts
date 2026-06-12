@@ -12,7 +12,7 @@ function queryClient(results: QueryResult[]) {
   const make = () => {
     const result = results[i++] ?? { data: null, count: 0, error: null }
     const b: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'in', 'order', 'limit']) {
+    for (const m of ['select', 'eq', 'in', 'order', 'limit', 'ilike', 'gte', 'lte']) {
       b[m] = vi.fn(() => b)
     }
     b.maybeSingle = vi.fn().mockResolvedValue(result)
@@ -99,6 +99,84 @@ describe('getTournamentStats', () => {
       matches: 0,
       active_matches: 0,
       finished_matches: 0,
+    })
+  })
+})
+
+describe('getPublicTournaments', () => {
+  it('devolve [] quando a query falha', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      queryClient([{ data: null, error: { message: 'boom' } }]) as never
+    )
+    const { getPublicTournaments } = await import('@/lib/queries/tournaments')
+    expect(await getPublicTournaments()).toEqual([])
+  })
+
+  it('agrega contagens e detecta jogos ao vivo', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      queryClient([
+        {
+          data: [
+            {
+              id: 't1',
+              name: 'Torneio',
+              status: 'active',
+              teams: [{ count: 5 }],
+              matches: [{ status: 'in_progress' }, { status: 'finished' }],
+            },
+          ],
+          error: null,
+        },
+      ]) as never
+    )
+    const { getPublicTournaments } = await import('@/lib/queries/tournaments')
+    const result = await getPublicTournaments()
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      id: 't1',
+      teams_count: 5,
+      matches_count: 2,
+      has_live_match: true,
+    })
+    // os campos embebidos não devem fazer parte do resultado final
+    expect(result[0]).not.toHaveProperty('teams')
+    expect(result[0]).not.toHaveProperty('matches')
+  })
+
+  it('ordena os torneios activos primeiro', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      queryClient([
+        {
+          data: [
+            { id: 'a', status: 'finished', teams: [], matches: [] },
+            { id: 'b', status: 'active', teams: [], matches: [] },
+            { id: 'c', status: 'draft', teams: [], matches: [] },
+          ],
+          error: null,
+        },
+      ]) as never
+    )
+    const { getPublicTournaments } = await import('@/lib/queries/tournaments')
+    const result = await getPublicTournaments()
+    expect(result.map((t) => t.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('trata contagens e embeds nulos como 0/false', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      queryClient([
+        {
+          data: [{ id: 't1', status: 'draft', teams: null, matches: null }],
+          error: null,
+        },
+      ]) as never
+    )
+    const { getPublicTournaments } = await import('@/lib/queries/tournaments')
+    const result = await getPublicTournaments()
+    expect(result[0]).toMatchObject({
+      teams_count: 0,
+      matches_count: 0,
+      has_live_match: false,
     })
   })
 })
