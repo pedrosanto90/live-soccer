@@ -130,43 +130,6 @@ export async function updateTournament(
   return { success: true, data: data as Tournament }
 }
 
-export async function deleteTournament(id: string): Promise<ActionResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { success: false, error: 'Sessão expirada. Inicia sessão novamente.' }
-  }
-
-  const { data: tournament } = await supabase
-    .from('tournaments')
-    .select('created_by, status')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (!tournament || tournament.created_by !== user.id) {
-    return { success: false, error: 'Apenas o criador pode apagar o torneio.' }
-  }
-
-  if (tournament.status !== 'draft') {
-    return {
-      success: false,
-      error: 'Só é possível apagar torneios em rascunho.',
-    }
-  }
-
-  const { error } = await supabase.from('tournaments').delete().eq('id', id)
-
-  if (error) {
-    return { success: false, error: 'Não foi possível apagar o torneio.' }
-  }
-
-  revalidatePath('/dashboard')
-  redirect('/dashboard')
-}
-
 const allowedTransitions: Record<TournamentStatus, TournamentStatus[]> = {
   draft: ['active', 'cancelled'],
   active: ['finished', 'cancelled'],

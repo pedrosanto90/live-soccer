@@ -3,10 +3,10 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Calendar, ExternalLink, MoreHorizontal, Pencil, Trash2, XCircle } from 'lucide-react'
+import { Calendar, ExternalLink, MoreHorizontal, Pencil, XCircle } from 'lucide-react'
 
 import { cn, formatDate } from '@/lib/utils'
-import { deleteTournament, updateTournamentStatus } from '@/lib/actions/tournaments'
+import { updateTournamentStatus } from '@/lib/actions/tournaments'
 import type { TournamentWithStats } from '@/lib/queries/tournaments'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -43,23 +43,12 @@ function StatItem({ label, value }: { label: string; value: number }) {
 export function TournamentCard({ tournament }: { tournament: TournamentWithStats }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
 
   const { stats } = tournament
 
   function goToOverview() {
     router.push(`/tournaments/${tournament.id}`)
-  }
-
-  function handleDelete() {
-    startTransition(async () => {
-      const result = await deleteTournament(tournament.id)
-      if (result && !result.success) {
-        toast.error(result.error)
-      }
-      // Em caso de sucesso a action redirecciona para /dashboard.
-    })
   }
 
   function handleCancel() {
@@ -133,19 +122,6 @@ export function TournamentCard({ tournament }: { tournament: TournamentWithStats
                   </DropdownMenuItem>
                 </>
               ) : null}
-
-              {tournament.status === 'draft' ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => setConfirmDelete(true)}
-                  >
-                    <Trash2 className="size-4" />
-                    Apagar
-                  </DropdownMenuItem>
-                </>
-              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -166,31 +142,6 @@ export function TournamentCard({ tournament }: { tournament: TournamentWithStats
           <StatItem label="Em curso" value={stats.active_matches} />
         </div>
       </div>
-
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apagar torneio</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tens a certeza? Esta acção não pode ser desfeita. Todos os dados do
-              torneio serão permanentemente apagados.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault()
-                handleDelete()
-              }}
-              disabled={isPending}
-              className="bg-danger text-white hover:bg-danger/90"
-            >
-              Apagar torneio
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <AlertDialogContent>

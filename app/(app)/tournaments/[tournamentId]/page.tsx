@@ -11,6 +11,7 @@ import { StatCard } from '@/components/ui/stat-card'
 import { Section } from '@/components/ui/section'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ActivateTournamentButton } from '@/components/tournament/activate-tournament-button'
+import { FinishTournamentButton } from '@/components/tournament/finish-tournament-button'
 import { TournamentShare } from '@/components/tournament/tournament-share'
 
 export const metadata: Metadata = {
@@ -64,6 +65,9 @@ export default async function TournamentOverviewPage({
             </Button>
             {tournament.status === 'draft' ? (
               <ActivateTournamentButton tournamentId={tournamentId} />
+            ) : null}
+            {tournament.status === 'active' ? (
+              <FinishTournamentButton tournamentId={tournamentId} />
             ) : null}
           </>
         ) : null}
