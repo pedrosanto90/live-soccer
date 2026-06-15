@@ -94,12 +94,12 @@ describe('Gestão de Jogos', () => {
     cy.url().should('match', /\/matches\/[0-9a-f-]+$/)
     cy.contains('Sporting CP vs Benfica').should('be.visible')
 
-    // O painel público abre numa nova aba; verificamos apenas que o link
-    // aponta para a rota pública correcta (sem autenticação).
-    cy.contains('a', 'Painel público')
+    // O placar do recinto abre numa nova aba; verificamos apenas que o link
+    // aponta para a rota correcta (sem autenticação).
+    cy.contains('a', 'Placar do recinto')
       .should('have.attr', 'target', '_blank')
       .and('have.attr', 'href')
-      .and('match', /\/match\/[0-9a-f-]+\/public$/)
+      .and('match', /\/match\/[0-9a-f-]+\/placar$/)
   })
 
   it('apaga o jogo após confirmação', () => {

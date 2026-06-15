@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Search, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 
 import type { TournamentStatus } from '@/types/database'
 import type { PublicTournamentFilters } from '@/lib/queries/tournaments'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -33,6 +34,10 @@ export function TournamentSearch({
   const startsAfter = searchParams.get('after') ?? ''
   const startsBefore = searchParams.get('before') ?? ''
   const hasDateFilter = Boolean(startsAfter || startsBefore)
+
+  // Em mobile os filtros de data ficam colapsados; abrem já se houver datas
+  // activas para não esconder filtros em uso.
+  const [showDateFilters, setShowDateFilters] = useState(hasDateFilter)
 
   // Constrói a próxima URL a partir dos searchParams actuais, aplicando updates.
   // Mantém sempre o termo de pesquisa local para não o perder ao mexer noutros filtros.
@@ -94,10 +99,25 @@ export function TournamentSearch({
             {label}
           </Button>
         ))}
+        {/* Alternar filtros de data — só mobile */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto sm:hidden"
+          onClick={() => setShowDateFilters((v) => !v)}
+        >
+          <SlidersHorizontal className="mr-1 size-3.5" />
+          {showDateFilters ? 'Menos filtros' : 'Mais filtros'}
+        </Button>
       </div>
 
       {/* Filtros de data */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div
+        className={cn(
+          'flex-wrap items-center gap-2 sm:flex',
+          showDateFilters ? 'flex' : 'hidden'
+        )}
+      >
         <p className="text-xs text-muted-foreground">Datas:</p>
         <div className="flex items-center gap-2">
           <Input

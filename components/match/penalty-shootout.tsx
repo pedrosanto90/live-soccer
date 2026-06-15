@@ -43,10 +43,20 @@ export function PenaltyShootout({
   const { state } = useMatch()
   const { penalties } = state
   const [playerId, setPlayerId] = useState<string>(UNREGISTERED)
+  const [firstTeamId, setFirstTeamId] = useState<string>(homeTeam.id)
   const [pending, setPending] = useState(false)
 
+  // A escolha de quem começa só vale enquanto não há pontapés; depois disso a
+  // ordem fica trancada pelo primeiro pontapé registado.
+  const chooseFirst = isAdmin && penalties.length === 0
+
   const totalKicks = settings.match.penalty_shootout_kicks
-  const next = getNextPenaltyKick(penalties, homeTeam.id, awayTeam.id)
+  const next = getNextPenaltyKick(
+    penalties,
+    homeTeam.id,
+    awayTeam.id,
+    firstTeamId
+  )
   const complete = isPenaltySeriesComplete(penalties, totalKicks)
 
   const homeScored = penalties.filter(
@@ -137,6 +147,24 @@ export function PenaltyShootout({
           </div>
         ))}
       </div>
+
+      {chooseFirst ? (
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-sm font-medium">Quem começa a marcar?</p>
+          <Select value={firstTeamId} onValueChange={setFirstTeamId}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[homeTeam, awayTeam].map((team) => (
+                <SelectItem key={team.id} value={team.id}>
+                  {team.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {isAdmin && !complete ? (
         <div className="space-y-2 border-t border-border pt-3">

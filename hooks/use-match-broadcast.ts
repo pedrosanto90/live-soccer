@@ -13,7 +13,14 @@ const BROADCAST_EVENT = 'match-action'
 // cronómetro é local em cada painel (derivado de timer_started_at/elapsed).
 export type LiveAction = Extract<
   MatchAction,
-  { type: 'MATCH_UPDATED' | 'EVENT_ADDED' | 'EVENT_CANCELLED' | 'PENALTY_ADDED' }
+  {
+    type:
+      | 'MATCH_UPDATED'
+      | 'EVENT_ADDED'
+      | 'EVENT_UPDATED'
+      | 'EVENT_CANCELLED'
+      | 'PENALTY_ADDED'
+  }
 >
 
 // Canal de Broadcast por jogo: o painel admin (`source = true`) transmite as

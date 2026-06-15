@@ -38,13 +38,13 @@ export function StandingsTable({
             <tr className="border-b border-border">
               <Th className="w-8 text-left px-2">#</Th>
               <Th className="text-left px-2">Equipa</Th>
-              <Th className="w-8 px-1">J</Th>
-              <Th className="w-8 px-1">V</Th>
-              <Th className="w-8 px-1">E</Th>
-              <Th className="w-8 px-1">D</Th>
-              <Th className="w-10 px-1">GM</Th>
-              <Th className="w-10 px-1">GS</Th>
-              <Th className="w-10 px-1">DG</Th>
+              <Th className="hidden w-8 px-1 sm:table-cell">J</Th>
+              <Th className="hidden w-8 px-1 sm:table-cell">V</Th>
+              <Th className="hidden w-8 px-1 sm:table-cell">E</Th>
+              <Th className="hidden w-8 px-1 sm:table-cell">D</Th>
+              <Th className="hidden w-10 px-1 lg:table-cell">GM</Th>
+              <Th className="hidden w-10 px-1 lg:table-cell">GS</Th>
+              <Th className="hidden w-10 px-1 lg:table-cell">DG</Th>
               <Th className="w-10 px-2 font-semibold">Pts</Th>
             </tr>
           </thead>
@@ -82,15 +82,15 @@ export function StandingsTable({
                       </span>
                     </div>
                   </td>
-                  <Td>{row.played}</Td>
-                  <Td>{row.won}</Td>
-                  <Td>{row.drawn}</Td>
-                  <Td>{row.lost}</Td>
-                  <Td>{row.goals_for}</Td>
-                  <Td>{row.goals_against}</Td>
+                  <Td className="hidden sm:table-cell">{row.played}</Td>
+                  <Td className="hidden sm:table-cell">{row.won}</Td>
+                  <Td className="hidden sm:table-cell">{row.drawn}</Td>
+                  <Td className="hidden sm:table-cell">{row.lost}</Td>
+                  <Td className="hidden lg:table-cell">{row.goals_for}</Td>
+                  <Td className="hidden lg:table-cell">{row.goals_against}</Td>
                   <td
                     className={cn(
-                      'px-1 py-2.5 text-center text-sm tabular-nums',
+                      'hidden px-1 py-2.5 text-center text-sm tabular-nums lg:table-cell',
                       row.goal_difference > 0 && 'text-success',
                       row.goal_difference < 0 && 'text-danger'
                     )}
@@ -110,10 +110,20 @@ export function StandingsTable({
       </div>
 
       {!compact ? (
-        <p className="text-[10px] text-muted-foreground">
-          J=Jogos, V=Vitórias, E=Empates, D=Derrotas, GM=Golos Marcados, GS=Golos
-          Sofridos, DG=Diferença de Golos, Pts=Pontos
-        </p>
+        <>
+          {/* Legenda completa — só a partir de lg, onde todas as colunas existem */}
+          <p className="hidden text-[10px] text-muted-foreground lg:block">
+            J=Jogos, V=Vitórias, E=Empates, D=Derrotas, GM=Golos Marcados,
+            GS=Golos Sofridos, DG=Diferença de Golos, Pts=Pontos
+          </p>
+          {/* Legenda reduzida — mobile/tablet (apenas colunas visíveis) */}
+          <p className="text-[10px] text-muted-foreground sm:hidden">
+            Pts=Pontos
+          </p>
+          <p className="hidden text-[10px] text-muted-foreground sm:block lg:hidden">
+            J=Jogos, V=Vitórias, E=Empates, D=Derrotas, Pts=Pontos
+          </p>
+        </>
       ) : null}
     </div>
   )
@@ -132,8 +142,18 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   )
 }
 
-function Td({ children }: { children: React.ReactNode }) {
+function Td({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
   return (
-    <td className="px-1 py-2.5 text-center text-sm tabular-nums">{children}</td>
+    <td
+      className={cn('px-1 py-2.5 text-center text-sm tabular-nums', className)}
+    >
+      {children}
+    </td>
   )
 }

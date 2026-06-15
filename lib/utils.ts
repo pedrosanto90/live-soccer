@@ -197,22 +197,32 @@ export function formatEventTime(elapsedSecs: number): string {
 }
 
 // Determina a próxima equipa a marcar e a ordem do pontapé numa série de
-// penáltis. Alterna casa/fora começando pela casa; a ordem incrementa a cada
-// par de pontapés.
+// penáltis. A equipa que começa bate primeiro em cada ronda; a ordem incrementa
+// a cada par de pontapés.
+//
+// Quem começa é definido pelo operador antes do primeiro pontapé (`firstTeamId`,
+// por omissão a casa). Assim que existe pelo menos um pontapé, a equipa inicial
+// passa a ser derivada do primeiro registado (a lista vem ordenada por
+// `created_at`), pelo que a escolha fica trancada e sobrevive a recarregamentos.
 export function getNextPenaltyKick(
   kicks: PenaltyKick[],
   homeTeamId: string,
-  awayTeamId: string
+  awayTeamId: string,
+  firstTeamId?: string
 ): { teamId: string; kickOrder: number } {
-  const homeCount = kicks.filter((k) => k.team_id === homeTeamId).length
-  const awayCount = kicks.filter((k) => k.team_id === awayTeamId).length
+  const first =
+    kicks.length > 0 ? kicks[0].team_id : firstTeamId ?? homeTeamId
+  const second = first === homeTeamId ? awayTeamId : homeTeamId
 
-  // A casa bate primeiro em cada ronda: se já bateu mais (ou igual) à frente,
-  // é a vez da equipa de fora.
-  if (homeCount <= awayCount) {
-    return { teamId: homeTeamId, kickOrder: homeCount + 1 }
+  const firstCount = kicks.filter((k) => k.team_id === first).length
+  const secondCount = kicks.filter((k) => k.team_id === second).length
+
+  // A equipa inicial bate primeiro em cada ronda: se já bateu mais (ou igual)
+  // que a outra, é a vez da segunda.
+  if (firstCount <= secondCount) {
+    return { teamId: first, kickOrder: firstCount + 1 }
   }
-  return { teamId: awayTeamId, kickOrder: awayCount + 1 }
+  return { teamId: second, kickOrder: secondCount + 1 }
 }
 
 // Detecta o fim de uma série de penáltis: ou ambas as equipas completaram a

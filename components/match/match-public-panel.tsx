@@ -7,7 +7,7 @@ import { useMatchBroadcast } from '@/hooks/use-match-broadcast'
 import { useTimer } from '@/hooks/use-timer'
 import { cn, formatEventTime, getCurrentFouls, getPeriodLabel } from '@/lib/utils'
 import type { MatchTeamLite } from '@/lib/queries/matches'
-import type { TournamentSettings } from '@/types/database'
+import type { EventType, TournamentSettings } from '@/types/database'
 
 interface MatchPublicPanelProps {
   homeTeam: MatchTeamLite
@@ -18,6 +18,9 @@ interface MatchPublicPanelProps {
   settings: TournamentSettings
 }
 
+// Vista de espetador (web/telemóvel). Acompanha o jogo com detalhe: resultado,
+// tempo, faltas e o histórico completo de eventos. Para o ecrã do recinto usa-se
+// o MatchScoreboard, que omite o histórico.
 export function MatchPublicPanel({
   homeTeam,
   awayTeam,
@@ -51,40 +54,40 @@ export function MatchPublicPanel({
     match.status !== 'finished' &&
     match.status !== 'penalties'
 
-  const goals = events
-    .filter((e) => !e.is_cancelled && (e.event_type === 'goal' || e.event_type === 'own_goal'))
-    .slice(0, 5)
+  // Histórico completo, mais recente primeiro. Faltas ficam de fora — já estão
+  // resumidas no contador acima.
+  const timeline = events
+    .filter((e) => !e.is_cancelled && e.event_type !== 'foul')
+    .slice()
+    .sort((a, b) => b.elapsed_secs - a.elapsed_secs)
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-[3vh] p-[3vw]">
+    <div className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-8 px-4 py-8">
       <div className="text-center">
-        <p className="text-[1.8vw] uppercase tracking-widest text-muted-foreground">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground sm:text-sm">
           {tournamentName}
         </p>
-        <p className="text-[1.4vw] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {phaseName}
           {groupName ? ` · ${groupName}` : ''}
         </p>
       </div>
 
-      <div className="flex flex-col items-center gap-[1vh]">
-        <StatusBadge
-          status={match.status}
-          className="text-[1.6vw] px-[1.4vw] py-[0.5vw]"
-        />
+      <div className="flex flex-col items-center gap-2">
+        <StatusBadge status={match.status} />
         {match.current_period ? (
-          <p className="text-[1.4vw] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {getPeriodLabel(match.current_period)}
           </p>
         ) : null}
       </div>
 
-      <div className="grid w-full max-w-[90vw] grid-cols-3 items-center gap-[4vw]">
+      <div className="grid grid-cols-3 items-center gap-4">
         <PublicTeamScore team={homeTeam} score={match.home_score} />
         {showTimer ? (
           <p
             className={cn(
-              'text-center text-[7vw] font-medium leading-none tabular-nums tracking-tight',
+              'text-center text-4xl font-medium leading-none tabular-nums tracking-tight sm:text-5xl lg:text-6xl',
               isOvertime ? 'text-warning' : 'text-foreground',
               isTimeUp && 'text-warning animate-blink'
             )}
@@ -92,32 +95,32 @@ export function MatchPublicPanel({
             {remainingTime}
           </p>
         ) : (
-          <p className="text-center text-[9vw] leading-none text-muted-foreground">:</p>
+          <p className="text-center text-5xl leading-none text-muted-foreground">:</p>
         )}
         <PublicTeamScore team={awayTeam} score={match.away_score} />
       </div>
 
       {match.status === 'penalties' || match.home_penalties || match.away_penalties ? (
-        <p className="text-[2.2vw] text-muted-foreground">
+        <p className="text-center text-base text-muted-foreground">
           Penáltis {match.home_penalties} — {match.away_penalties}
         </p>
       ) : null}
 
-      <div className="flex gap-[6vw]">
+      <div className="flex justify-center gap-12">
         {(['home', 'away'] as const).map((side) => {
           const team = side === 'home' ? homeTeam : awayTeam
           const fouls = getCurrentFouls(match, side, match.current_period)
           return (
-            <div key={side} className="flex flex-col items-center gap-[1.2vh]">
-              <p className="text-[1.4vw] uppercase tracking-wide text-muted-foreground">
+            <div key={side} className="flex flex-col items-center gap-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Faltas {team.short_name ?? team.name}
               </p>
-              <div className="flex gap-[0.6vw]">
+              <div className="flex gap-1.5">
                 {Array.from({ length: maxFouls }).map((_, i) => (
                   <span
                     key={i}
                     className={cn(
-                      'size-[1.8vw] rounded-full',
+                      'size-2 rounded-full sm:size-2.5',
                       i < fouls
                         ? fouls >= maxFouls
                           ? 'bg-danger'
@@ -132,21 +135,56 @@ export function MatchPublicPanel({
         })}
       </div>
 
-      {goals.length > 0 ? (
-        <div className="space-y-[0.5vh] text-center">
-          {goals.map((event) => {
-            const team = event.team_id === homeTeam.id ? homeTeam : awayTeam
-            return (
-              <p key={event.id} className="text-[1.6vw] text-muted-foreground">
-                ⚽ {event.player_name ?? '—'} ({team.short_name ?? team.name}){' '}
-                {formatEventTime(event.elapsed_secs)}&apos;
-              </p>
-            )
-          })}
+      {timeline.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Eventos
+          </p>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {timeline.map((event) => {
+              const team = event.team_id === homeTeam.id ? homeTeam : awayTeam
+              return (
+                <li
+                  key={event.id}
+                  className="flex items-center gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="w-8 shrink-0 tabular-nums text-muted-foreground">
+                    {formatEventTime(event.elapsed_secs)}&apos;
+                  </span>
+                  <span className="shrink-0">{eventIcon(event.event_type)}</span>
+                  <span className="flex-1 truncate">
+                    {event.player_name ?? '—'}
+                  </span>
+                  <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
+                    {team.short_name ?? team.name}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       ) : null}
     </div>
   )
+}
+
+function eventIcon(type: EventType): string {
+  switch (type) {
+    case 'goal':
+      return '⚽'
+    case 'own_goal':
+      return '⚽ (p.b.)'
+    case 'penalty_scored':
+      return '⚽ (gp)'
+    case 'penalty_missed':
+      return '❌ (gp)'
+    case 'yellow_card':
+      return '🟨'
+    case 'red_card':
+      return '🟥'
+    default:
+      return ''
+  }
 }
 
 function PublicTeamScore({
@@ -157,13 +195,17 @@ function PublicTeamScore({
   score: number
 }) {
   return (
-    <div className="flex flex-col items-center gap-[1.5vh]">
+    <div className="flex flex-col items-center gap-2">
       <span
-        className="h-[0.6vh] w-[8vw] rounded-full"
+        className="h-1 w-12 rounded-full"
         style={{ background: team.color_primary }}
       />
-      <p className="text-center text-[2.6vw] font-medium">{team.short_name ?? team.name}</p>
-      <p className="text-[17vw] font-medium leading-none tabular-nums">{score}</p>
+      <p className="text-center text-base font-medium sm:text-lg">
+        {team.short_name ?? team.name}
+      </p>
+      <p className="text-6xl font-medium leading-none tabular-nums sm:text-7xl lg:text-8xl">
+        {score}
+      </p>
     </div>
   )
 }

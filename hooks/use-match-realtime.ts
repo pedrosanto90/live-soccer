@@ -60,6 +60,8 @@ export function useMatchRealtime(matchId: string) {
           const next = payload.new as MatchEvent
           if (next.is_cancelled) {
             dispatch({ type: 'EVENT_CANCELLED', payload: next.id })
+          } else {
+            dispatch({ type: 'EVENT_UPDATED', payload: next })
           }
         }
       )

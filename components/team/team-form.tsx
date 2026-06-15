@@ -178,7 +178,7 @@ export function TeamForm({ tournamentId, defaultValues, teamId }: TeamFormProps)
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ColorField
               control={form.control}
               name="color_primary"
@@ -201,11 +201,21 @@ export function TeamForm({ tournamentId, defaultValues, teamId }: TeamFormProps)
             <span className="text-sm">{watchName || 'Nome da equipa'}</span>
           </div>
 
-          <div className="flex justify-between border-t border-border pt-4">
-            <Button type="button" variant="ghost" onClick={() => router.back()}>
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full sm:w-auto"
+              onClick={() => router.back()}
+            >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending} data-testid="submit-button">
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={isPending}
+              data-testid="submit-button"
+            >
               {isPending && <Loader2 className="size-4 animate-spin" />}
               {isPending
                 ? 'A guardar...'

@@ -33,7 +33,7 @@ export function TournamentNav({ tournamentId, name, status }: TournamentNavProps
   return (
     <div className="border-b border-border">
       <div className="w-full">
-        <div className="flex items-center gap-2 pb-3 text-sm text-muted-foreground">
+        <div className="hidden items-center gap-2 pb-3 text-sm text-muted-foreground sm:flex">
           <Link href="/dashboard" className="hover:text-foreground">
             Dashboard
           </Link>
@@ -41,14 +41,14 @@ export function TournamentNav({ tournamentId, name, status }: TournamentNavProps
           <span className="font-medium text-foreground">{name}</span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <nav className="flex gap-1 overflow-x-auto">
+        <div className="flex items-center justify-between gap-2 overflow-x-auto">
+          <nav className="flex min-w-max gap-1 sm:min-w-0">
             {tabs.map((tab) => (
               <Link
                 key={tab.href}
                 href={tab.href}
                 className={cn(
-                  'border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors',
+                  'border-b-2 px-3 py-2.5 text-sm whitespace-nowrap transition-colors',
                   isActive(tab.href)
                     ? 'border-foreground font-medium text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'

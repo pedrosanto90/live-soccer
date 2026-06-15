@@ -272,11 +272,31 @@ export function TournamentForm({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs defaultValue="info" className="w-full">
-            <TabsList className="w-full">
-              <TabsTrigger value="info">Informações</TabsTrigger>
-              <TabsTrigger value="match">Configurações do jogo</TabsTrigger>
-              <TabsTrigger value="scoring">Pontuação e desempate</TabsTrigger>
-              <TabsTrigger value="cards">Regras de cartões</TabsTrigger>
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+              <TabsTrigger
+                value="info"
+                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+              >
+                Informações
+              </TabsTrigger>
+              <TabsTrigger
+                value="match"
+                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+              >
+                Configurações do jogo
+              </TabsTrigger>
+              <TabsTrigger
+                value="scoring"
+                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+              >
+                Pontuação e desempate
+              </TabsTrigger>
+              <TabsTrigger
+                value="cards"
+                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+              >
+                Regras de cartões
+              </TabsTrigger>
             </TabsList>
 
             {/* Tab 1 — Informações */}
@@ -493,11 +513,21 @@ export function TournamentForm({
             </TabsContent>
           </Tabs>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <Button type="button" variant="ghost" onClick={() => router.back()}>
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full sm:w-auto"
+              onClick={() => router.back()}
+            >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending} data-testid="submit-button">
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={isPending}
+              data-testid="submit-button"
+            >
               {isPending && <Loader2 className="size-4 animate-spin" />}
               {isPending
                 ? 'A guardar...'

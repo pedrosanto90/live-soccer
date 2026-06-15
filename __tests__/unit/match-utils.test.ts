@@ -69,6 +69,27 @@ describe('getNextPenaltyKick', () => {
       getNextPenaltyKick([kick('h', true), kick('a', false)], 'h', 'a')
     ).toEqual({ teamId: 'h', kickOrder: 2 })
   })
+
+  it('respeita a equipa escolhida para começar (fora)', () => {
+    // Sem pontapés ainda: a escolha do operador define quem começa.
+    expect(getNextPenaltyKick([], 'h', 'a', 'a')).toEqual({
+      teamId: 'a',
+      kickOrder: 1,
+    })
+    // Depois do primeiro pontapé da fora, é a vez da casa.
+    expect(getNextPenaltyKick([kick('a', true)], 'h', 'a', 'a')).toEqual({
+      teamId: 'h',
+      kickOrder: 1,
+    })
+  })
+
+  it('deriva quem começou do primeiro pontapé, ignorando a escolha', () => {
+    // A fora bateu primeiro; mesmo passando 'h' como escolha, a ordem fica
+    // trancada pelo histórico (sobrevive a recarregamentos).
+    expect(
+      getNextPenaltyKick([kick('a', true), kick('h', true)], 'h', 'a', 'h')
+    ).toEqual({ teamId: 'a', kickOrder: 2 })
+  })
 })
 
 describe('isPenaltySeriesComplete', () => {

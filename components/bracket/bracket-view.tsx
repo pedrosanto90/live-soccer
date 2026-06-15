@@ -1,5 +1,7 @@
 'use client'
 
+import { Hand } from 'lucide-react'
+
 import { getRoundLabel } from '@/lib/bracket'
 import type { BracketMatchRow } from '@/lib/queries/bracket'
 import { BracketMatchCard } from './bracket-match-card'
@@ -46,23 +48,30 @@ export function BracketView({ matches, onMatchClick }: BracketViewProps) {
   }
 
   return (
-    <div className="flex gap-6 overflow-x-auto pb-2">
-      {columns.map((column) => (
-        <div key={column.round} className="flex min-w-44 flex-1 flex-col">
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {getRoundLabel(column.round)}
-          </p>
-          <div className="flex flex-1 flex-col justify-around gap-4">
-            {column.matches.map((match) => (
-              <BracketMatchCard
-                key={match.id}
-                match={match}
-                onClick={onMatchClick ? () => onMatchClick(match.id) : undefined}
-              />
-            ))}
+    <div>
+      <div className="flex gap-4 overflow-x-auto pb-2 sm:gap-6">
+        {columns.map((column) => (
+          <div key={column.round} className="flex min-w-44 flex-1 flex-col">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {getRoundLabel(column.round)}
+            </p>
+            <div className="flex flex-1 flex-col justify-around gap-4">
+              {column.matches.map((match) => (
+                <BracketMatchCard
+                  key={match.id}
+                  match={match}
+                  onClick={onMatchClick ? () => onMatchClick(match.id) : undefined}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      {columns.length > 1 ? (
+        <p className="mt-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground sm:hidden">
+          <Hand className="size-3" /> Arrasta para navegar no bracket
+        </p>
+      ) : null}
     </div>
   )
 }

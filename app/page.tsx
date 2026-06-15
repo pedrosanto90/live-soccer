@@ -46,10 +46,10 @@ export default async function Home({
     <div className="min-h-svh bg-background">
       <HomeNavbar profile={profile} />
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-10">
+      <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
         {/* Hero */}
-        <div className="mb-10 text-center">
-          <h1 className="text-3xl font-medium tracking-tight">
+        <div className="mb-8 text-center sm:mb-10">
+          <h1 className="text-2xl font-medium tracking-tight sm:text-3xl">
             Torneios de Futebol
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">

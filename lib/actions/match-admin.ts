@@ -33,6 +33,15 @@ export interface AddEventInput {
   elapsed_secs: number
 }
 
+export interface AddFoulInput {
+  team_id: string
+  player_id?: string | null
+  player_name?: string | null
+  // Cartão associado à falta (null = sem cartão).
+  card?: 'yellow_card' | 'red_card' | null
+  elapsed_secs: number
+}
+
 export interface PenaltyKickInput {
   team_id: string
   player_id?: string | null
@@ -380,6 +389,124 @@ export async function addEvent(
   }
 }
 
+// Regista uma falta e, opcionalmente, o cartão associado. A falta é sempre
+// guardada (necessária para estatísticas futuras) mas não aparece no log de
+// eventos; só o cartão, quando existe, é mostrado. Ambos partilham jogador,
+// equipa e minuto.
+export async function addFoul(
+  matchId: string,
+  input: AddFoulInput
+): Promise<ActionResult<{ foul: MatchEvent; card: MatchEvent | null; match: Match }>> {
+  const supabase = await createClient()
+  const auth = await requireMatchStaff(supabase, matchId)
+  if ('error' in auth) return { success: false, error: auth.error }
+
+  const match = auth.match
+  if (!match.current_period) {
+    return { success: false, error: 'O jogo não está em curso.' }
+  }
+
+  const side: 'home' | 'away' =
+    input.team_id === match.home_team_id ? 'home' : 'away'
+  const elapsedSecs = Math.max(0, Math.round(input.elapsed_secs))
+  const playerId = input.player_id ?? null
+  const playerName = input.player_name?.trim() || null
+
+  const base = {
+    match_id: matchId,
+    team_id: input.team_id,
+    player_id: playerId,
+    player_name: playerName,
+    period: match.current_period,
+    elapsed_secs: elapsedSecs,
+    created_by: auth.userId,
+  }
+
+  const { data: foul, error: foulError } = await supabase
+    .from('match_events')
+    .insert({ ...base, event_type: 'foul' })
+    .select('*')
+    .single()
+
+  if (foulError || !foul) {
+    return { success: false, error: 'Não foi possível registar a falta.' }
+  }
+
+  // Incrementa o contador de faltas da parte actual.
+  const patch = scorePatchForEvent(match, 'foul', side, +1)
+  if (patch) await supabase.from('matches').update(patch).eq('id', matchId)
+
+  let card: MatchEvent | null = null
+  if (input.card) {
+    const { data: createdCard, error: cardError } = await supabase
+      .from('match_events')
+      .insert({ ...base, event_type: input.card })
+      .select('*')
+      .single()
+    if (cardError || !createdCard) {
+      // A falta já ficou registada; o cartão falhou. Reportamos para o operador
+      // poder voltar a tentar adicionar o cartão pelo log.
+      return { success: false, error: 'Falta registada, mas o cartão falhou.' }
+    }
+    card = createdCard as MatchEvent
+  }
+
+  return {
+    success: true,
+    data: {
+      foul: foul as MatchEvent,
+      card,
+      match: { ...match, ...(patch ?? {}) },
+    },
+  }
+}
+
+export interface UpdateEventInput {
+  player_id?: string | null
+  player_name?: string | null
+  elapsed_secs?: number
+}
+
+// Edita os dados descritivos de um evento já registado (jogador, minuto) — por
+// exemplo, atribuir o autor de um golo só mais tarde. Não altera tipo nem
+// equipa, por isso não mexe nos contadores agregados (marcador/faltas).
+export async function updateEvent(
+  eventId: string,
+  input: UpdateEventInput
+): Promise<ActionResult<{ event: MatchEvent }>> {
+  const supabase = await createClient()
+
+  const { data: event } = await supabase
+    .from('match_events')
+    .select('*')
+    .eq('id', eventId)
+    .maybeSingle()
+  if (!event) return { success: false, error: 'Evento não encontrado.' }
+
+  const auth = await requireMatchStaff(supabase, (event as MatchEvent).match_id)
+  if ('error' in auth) return { success: false, error: auth.error }
+
+  const patch: Partial<MatchEvent> = {}
+  if ('player_id' in input) patch.player_id = input.player_id ?? null
+  if ('player_name' in input) patch.player_name = input.player_name?.trim() || null
+  if (input.elapsed_secs != null) {
+    patch.elapsed_secs = Math.max(0, Math.round(input.elapsed_secs))
+  }
+
+  const { data: updated, error } = await supabase
+    .from('match_events')
+    .update(patch)
+    .eq('id', eventId)
+    .select('*')
+    .single()
+
+  if (error || !updated) {
+    return { success: false, error: 'Não foi possível editar o evento.' }
+  }
+
+  return { success: true, data: { event: updated as MatchEvent } }
+}
+
 export async function cancelEvent(
   eventId: string
 ): Promise<ActionResult<{ match: Match }>> {
@@ -429,7 +556,9 @@ function scorePatchForEvent(
   const bump = (current: number) => Math.max(0, current + delta)
 
   switch (eventType) {
+    // Um penálti convertido durante o jogo conta como golo no marcador.
     case 'goal':
+    case 'penalty_scored':
       return side === 'home'
         ? { home_score: bump(match.home_score) }
         : { away_score: bump(match.away_score) }

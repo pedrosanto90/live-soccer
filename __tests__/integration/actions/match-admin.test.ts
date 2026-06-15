@@ -169,6 +169,128 @@ describe('addEvent', () => {
     expect(res.success).toBe(true)
     if (res.success) expect(res.data.event.id).toBe('e1')
   })
+
+  it('um penálti convertido conta para o marcador', async () => {
+    const inPlay = {
+      ...scheduledMatch,
+      status: 'in_progress',
+      current_period: 'first_half',
+    }
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeMock({
+        maybeSingle: [{ data: inPlay }, { data: { role: 'admin' } }],
+        table: {
+          match_events: [{ data: { id: 'e1', event_type: 'penalty_scored' } }],
+          matches: [{ data: null }], // update do marcador
+        },
+      }) as never
+    )
+
+    const { addEvent } = await import('@/lib/actions/match-admin')
+    const res = await addEvent(MATCH, {
+      team_id: 'home',
+      event_type: 'penalty_scored',
+      elapsed_secs: 600,
+    })
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.data.match.home_score).toBe(1)
+  })
+})
+
+describe('addFoul', () => {
+  const inPlay = {
+    ...scheduledMatch,
+    status: 'in_progress',
+    current_period: 'first_half',
+  }
+
+  it('regista uma falta sem cartão e incrementa o contador', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeMock({
+        maybeSingle: [{ data: inPlay }, { data: { role: 'admin' } }],
+        table: {
+          match_events: [{ data: { id: 'f1', event_type: 'foul' } }],
+          matches: [{ data: null }], // update do contador de faltas
+        },
+      }) as never
+    )
+
+    const { addFoul } = await import('@/lib/actions/match-admin')
+    const res = await addFoul(MATCH, { team_id: 'home', elapsed_secs: 120 })
+    expect(res.success).toBe(true)
+    if (res.success) {
+      expect(res.data.card).toBeNull()
+      expect(res.data.match.home_fouls_h1).toBe(1)
+    }
+  })
+
+  it('regista uma falta com cartão amarelo (dois eventos)', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeMock({
+        maybeSingle: [{ data: inPlay }, { data: { role: 'admin' } }],
+        table: {
+          match_events: [
+            { data: { id: 'f1', event_type: 'foul' } },
+            { data: { id: 'c1', event_type: 'yellow_card' } },
+          ],
+          matches: [{ data: null }],
+        },
+      }) as never
+    )
+
+    const { addFoul } = await import('@/lib/actions/match-admin')
+    const res = await addFoul(MATCH, {
+      team_id: 'home',
+      card: 'yellow_card',
+      elapsed_secs: 120,
+    })
+    expect(res.success).toBe(true)
+    if (res.success) {
+      expect(res.data.foul.event_type).toBe('foul')
+      expect(res.data.card?.event_type).toBe('yellow_card')
+    }
+  })
+})
+
+describe('updateEvent', () => {
+  it('atribui o jogador a um golo já registado', async () => {
+    const event = {
+      id: 'e1',
+      match_id: MATCH,
+      team_id: 'home',
+      event_type: 'goal',
+      period: 'first_half',
+      player_name: null,
+      is_cancelled: false,
+    }
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeMock({
+        maybeSingle: [
+          { data: event },
+          { data: scheduledMatch },
+          { data: { role: 'admin' } },
+        ],
+        table: {
+          match_events: [{ data: { ...event, player_name: 'Ronaldo' } }],
+        },
+      }) as never
+    )
+
+    const { updateEvent } = await import('@/lib/actions/match-admin')
+    const res = await updateEvent('e1', { player_name: 'Ronaldo' })
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.data.event.player_name).toBe('Ronaldo')
+  })
+
+  it('falha se o evento não existe', async () => {
+    vi.mocked(createClient).mockResolvedValueOnce(
+      makeMock({ maybeSingle: [{ data: null }] }) as never
+    )
+
+    const { updateEvent } = await import('@/lib/actions/match-admin')
+    const res = await updateEvent('missing', { player_name: 'X' })
+    expect(res).toEqual({ success: false, error: 'Evento não encontrado.' })
+  })
 })
 
 describe('cancelEvent', () => {

@@ -1,14 +1,32 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { ExternalLink, Pause, Play, Plus, RotateCcw, X } from 'lucide-react'
+import {
+  Clock,
+  ExternalLink,
+  Minus,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  RotateCcw,
+  X,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { TeamAvatar } from '@/components/match/team-avatar'
-import { AddEventDialog } from '@/components/match/add-event-dialog'
+import { AddEventDialog, type EventDialogMode } from '@/components/match/add-event-dialog'
+import { EditEventDialog } from '@/components/match/edit-event-dialog'
 import { EndMatchDialog } from '@/components/match/end-match-dialog'
 import { PenaltyShootout } from '@/components/match/penalty-shootout'
 import { useMatch } from '@/contexts/match-context'
@@ -16,7 +34,6 @@ import { useMatchRealtime } from '@/hooks/use-match-realtime'
 import { useMatchBroadcast, type LiveAction } from '@/hooks/use-match-broadcast'
 import { useTimer } from '@/hooks/use-timer'
 import {
-  addEvent,
   cancelEvent,
   endHalf,
   finishMatch,
@@ -94,10 +111,13 @@ export function MatchAdminPanel({
   const [manualSeconds, setManualSeconds] = useState(0)
   const [dialog, setDialog] = useState<{
     teamId: string
-    eventType: EventType
+    mode: EventDialogMode
   } | null>(null)
+  const [editing, setEditing] = useState<MatchEvent | null>(null)
   const [endOpen, setEndOpen] = useState(false)
   const [allowExtra, setAllowExtra] = useState(true)
+  // Em mobile os inputs de tempo manual ficam num diálogo (não cabem na barra).
+  const [setTimeOpen, setSetTimeOpen] = useState(false)
 
   const canEdit = isAdmin && match.status !== 'finished' && match.status !== 'cancelled'
   const inPlay = match.status === 'in_progress' || match.status === 'extra_time'
@@ -113,26 +133,36 @@ export function MatchAdminPanel({
     return res
   }
 
-  function openAddEvent(teamId: string, eventType: EventType) {
-    setDialog({ teamId, eventType })
+  function openDialog(teamId: string, mode: EventDialogMode) {
+    setDialog({ teamId, mode })
+  }
+
+  // Anula o golo mais recente de uma equipa (o evento mais recente que somou ao
+  // marcador desse lado: golo/penálti próprio ou golo na própria do adversário).
+  // Reaproveita a anulação de eventos, mantendo marcador e log consistentes.
+  function handleRemoveGoal(side: 'home' | 'away') {
+    const teamId = side === 'home' ? homeTeam.id : awayTeam.id
+    const oppId = side === 'home' ? awayTeam.id : homeTeam.id
+    const last = events.find(
+      (e) =>
+        !e.is_cancelled &&
+        (((e.event_type === 'goal' || e.event_type === 'penalty_scored') &&
+          e.team_id === teamId) ||
+          (e.event_type === 'own_goal' && e.team_id === oppId))
+    )
+    if (!last) {
+      toast.info('Sem golos para remover.')
+      return
+    }
+    void handleCancelEvent(last.id)
   }
 
   async function handlePlayPause() {
     await run(timerRunning ? pauseTimer(match.id) : resumeTimer(match.id))
   }
 
-  async function handleAddFoul(side: 'home' | 'away') {
-    setPending(true)
-    const res = await addEvent(match.id, {
-      team_id: side === 'home' ? homeTeam.id : awayTeam.id,
-      event_type: 'foul',
-      elapsed_secs: Math.round(state.elapsedSecs),
-    })
-    setPending(false)
-    if (res.success) {
-      apply({ type: 'EVENT_ADDED', payload: res.data.event })
-      apply({ type: 'MATCH_UPDATED', payload: res.data.match })
-    } else toast.error(res.error)
+  function handleEventUpdated(event: MatchEvent) {
+    apply({ type: 'EVENT_UPDATED', payload: event })
   }
 
   async function handleCancelEvent(id: string) {
@@ -154,7 +184,11 @@ export function MatchAdminPanel({
     void run(finishMatch(match.id, 'finish'))
   }
 
-  const periodEvents = events.filter((e) => e.period === match.current_period)
+  // As faltas são contabilizadas no contador, não no log; só os cartões e os
+  // golos aparecem aqui (uma falta com cartão gera um evento de cartão à parte).
+  const periodEvents = events.filter(
+    (e) => e.period === match.current_period && e.event_type !== 'foul'
+  )
 
   return (
     <div className="space-y-6">
@@ -171,7 +205,7 @@ export function MatchAdminPanel({
         <Button variant="outline" size="sm" asChild>
           <a href={publicHref} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="size-3.5" />
-            Painel público
+            Placar do recinto
           </a>
         </Button>
       </div>
@@ -180,13 +214,15 @@ export function MatchAdminPanel({
         {/* Coluna principal */}
         <div className="space-y-4 lg:col-span-3">
           {/* Scoreboard */}
-          <div className="rounded-lg border border-border bg-card p-6">
-            <div className="grid grid-cols-3 items-center gap-4">
+          <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
+            <div className="grid grid-cols-3 items-center gap-2 sm:gap-4">
               <ScoreSide
                 team={homeTeam}
                 score={match.home_score}
                 canScore={canEdit && inPlay}
-                onGoal={() => openAddEvent(homeTeam.id, 'goal')}
+                onGoal={() => openDialog(homeTeam.id, 'goal')}
+                onRemoveGoal={() => handleRemoveGoal('home')}
+                onFoul={() => openDialog(homeTeam.id, 'foul')}
               />
               <div className="flex flex-col items-center gap-1">
                 <p className="text-4xl font-medium tabular-nums text-muted-foreground">
@@ -197,26 +233,28 @@ export function MatchAdminPanel({
                 team={awayTeam}
                 score={match.away_score}
                 canScore={canEdit && inPlay}
-                onGoal={() => openAddEvent(awayTeam.id, 'goal')}
+                onGoal={() => openDialog(awayTeam.id, 'goal')}
+                onRemoveGoal={() => handleRemoveGoal('away')}
+                onFoul={() => openDialog(awayTeam.id, 'foul')}
               />
             </div>
           </div>
 
           {/* Timer */}
           {match.status !== 'scheduled' && match.status !== 'penalties' ? (
-            <div className="rounded-lg border border-border bg-surface-2 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="rounded-lg border border-border bg-surface-2 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                 <div className="text-center">
                   <p
                     className={cn(
-                      'text-3xl font-medium tabular-nums',
+                      'text-2xl font-medium tabular-nums sm:text-3xl',
                       isOvertime ? 'text-warning' : 'text-foreground',
                       isTimeUp && 'text-warning animate-blink'
                     )}
                   >
                     {remainingTime}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground sm:text-xs">
                     Decorrido {displayTime}
                   </p>
                 </div>
@@ -247,35 +285,47 @@ export function MatchAdminPanel({
                 ) : null}
 
                 {!timerRunning && canEdit && inPlay ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={99}
-                      className="h-8 w-14 text-center"
-                      value={manualMinutes}
-                      onChange={(e) => setManualMinutes(Number(e.target.value))}
-                    />
-                    <span className="text-sm text-muted-foreground">:</span>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={59}
-                      className="h-8 w-14 text-center"
-                      value={manualSeconds}
-                      onChange={(e) => setManualSeconds(Number(e.target.value))}
-                    />
+                  <>
+                    {/* Inputs inline — tablet/desktop */}
+                    <div className="hidden items-center gap-1 sm:flex">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={99}
+                        className="h-8 w-14 text-center"
+                        value={manualMinutes}
+                        onChange={(e) => setManualMinutes(Number(e.target.value))}
+                      />
+                      <span className="text-sm text-muted-foreground">:</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={59}
+                        className="h-8 w-14 text-center"
+                        value={manualSeconds}
+                        onChange={(e) => setManualSeconds(Number(e.target.value))}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={pending}
+                        onClick={() =>
+                          run(setTimerManual(match.id, manualMinutes, manualSeconds))
+                        }
+                      >
+                        Definir
+                      </Button>
+                    </div>
+                    {/* Botão que abre o diálogo — mobile */}
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={pending}
-                      onClick={() =>
-                        run(setTimerManual(match.id, manualMinutes, manualSeconds))
-                      }
+                      className="sm:hidden"
+                      onClick={() => setSetTimeOpen(true)}
                     >
-                      Definir
+                      <Clock className="size-3.5" /> Definir tempo
                     </Button>
-                  </div>
+                  </>
                 ) : null}
               </div>
             </div>
@@ -352,16 +402,6 @@ export function MatchAdminPanel({
                       {fouls}
                       {atLimit ? ' ⚠' : ''}
                     </span>
-                    {canEdit && inPlay ? (
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        disabled={pending}
-                        onClick={() => handleAddFoul(side)}
-                      >
-                        <Plus className="size-3" />
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
               )
@@ -386,7 +426,8 @@ export function MatchAdminPanel({
                         ? homeTeam.short_name ?? homeTeam.name
                         : awayTeam.short_name ?? awayTeam.name
                     }
-                    canCancel={canEdit && !event.is_cancelled}
+                    canEdit={canEdit && !event.is_cancelled}
+                    onEdit={() => setEditing(event)}
                     onCancel={() => handleCancelEvent(event.id)}
                   />
                 ))}
@@ -398,22 +439,37 @@ export function MatchAdminPanel({
 
       {dialog ? (
         <AddEventDialog
-          key={`${dialog.teamId}-${dialog.eventType}`}
+          key={`${dialog.teamId}-${dialog.mode}`}
+          mode={dialog.mode}
           matchId={match.id}
           homeTeam={homeTeam}
           awayTeam={awayTeam}
           players={players}
           teamId={dialog.teamId}
-          eventType={dialog.eventType}
           currentElapsedSecs={state.elapsedSecs}
           open={dialog != null}
           onOpenChange={(open) => {
             if (!open) setDialog(null)
           }}
-          onAdded={({ event, match: updated }) => {
-            apply({ type: 'EVENT_ADDED', payload: event })
+          onAdded={({ events: added, match: updated }) => {
+            added.forEach((event) => apply({ type: 'EVENT_ADDED', payload: event }))
             apply({ type: 'MATCH_UPDATED', payload: updated })
           }}
+        />
+      ) : null}
+
+      {editing ? (
+        <EditEventDialog
+          key={editing.id}
+          event={editing}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          players={players}
+          open={editing != null}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null)
+          }}
+          onSaved={handleEventUpdated}
         />
       ) : null}
 
@@ -428,6 +484,48 @@ export function MatchAdminPanel({
           void run(finishMatch(match.id, outcome))
         }}
       />
+
+      {/* Definir tempo manualmente — mobile */}
+      <Dialog open={setTimeOpen} onOpenChange={setSetTimeOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Definir tempo</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center gap-2 py-2">
+            <Input
+              type="number"
+              min={0}
+              max={99}
+              aria-label="Minutos"
+              className="h-11 w-16 text-center"
+              value={manualMinutes}
+              onChange={(e) => setManualMinutes(Number(e.target.value))}
+            />
+            <span className="text-lg text-muted-foreground">:</span>
+            <Input
+              type="number"
+              min={0}
+              max={59}
+              aria-label="Segundos"
+              className="h-11 w-16 text-center"
+              value={manualSeconds}
+              onChange={(e) => setManualSeconds(Number(e.target.value))}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              className="w-full"
+              disabled={pending}
+              onClick={async () => {
+                await run(setTimerManual(match.id, manualMinutes, manualSeconds))
+                setSetTimeOpen(false)
+              }}
+            >
+              Definir tempo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -439,21 +537,59 @@ function ScoreSide({
   score,
   canScore,
   onGoal,
+  onRemoveGoal,
+  onFoul,
 }: {
   team: MatchTeamLite
   score: number
   canScore: boolean
   onGoal: () => void
+  onRemoveGoal: () => void
+  onFoul: () => void
 }) {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <TeamAvatar team={team} className="size-12 text-base" />
-      <p className="text-center text-sm font-medium">{team.name}</p>
-      <p className="text-5xl font-medium tabular-nums">{score}</p>
+    <div className="flex flex-col items-center gap-1 sm:gap-2">
+      <TeamAvatar
+        team={team}
+        className="size-8 text-sm sm:size-12 sm:text-base"
+      />
+      <p className="max-w-[80px] truncate text-center text-xs font-medium sm:max-w-none sm:text-sm">
+        <span className="sm:hidden">{team.short_name ?? team.name}</span>
+        <span className="hidden sm:inline">{team.name}</span>
+      </p>
+      <p className="text-4xl font-medium tabular-nums sm:text-5xl">{score}</p>
       {canScore ? (
-        <Button size="sm" variant="outline" onClick={onGoal}>
-          <Plus className="size-3" /> Golo
-        </Button>
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="icon-xs"
+              variant="outline"
+              disabled={score <= 0}
+              aria-label="Remover golo"
+              onClick={onRemoveGoal}
+            >
+              <Minus className="size-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="px-2 sm:px-3"
+              aria-label="Adicionar golo"
+              onClick={onGoal}
+            >
+              <Plus className="size-3" /> <span className="hidden sm:inline">Golo</span>
+            </Button>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="px-2 sm:px-3"
+            aria-label="Adicionar falta"
+            onClick={onFoul}
+          >
+            <Plus className="size-3" /> <span className="hidden sm:inline">Falta</span>
+          </Button>
+        </div>
       ) : null}
     </div>
   )
@@ -600,12 +736,14 @@ const EVENT_NAMES: Record<EventType, string> = {
 function EventRow({
   event,
   teamName,
-  canCancel,
+  canEdit,
+  onEdit,
   onCancel,
 }: {
   event: MatchEvent
   teamName: string
-  canCancel: boolean
+  canEdit: boolean
+  onEdit: () => void
   onCancel: () => void
 }) {
   const icon = EVENT_ICONS[event.event_type]
@@ -624,10 +762,15 @@ function EventRow({
       <span className="tabular-nums text-muted-foreground">
         {formatEventTime(event.elapsed_secs)}&apos;
       </span>
-      {canCancel ? (
-        <Button size="icon-xs" variant="ghost" onClick={onCancel}>
-          <X className="size-3" />
-        </Button>
+      {canEdit ? (
+        <>
+          <Button size="icon-xs" variant="ghost" onClick={onEdit}>
+            <Pencil className="size-3" />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={onCancel}>
+            <X className="size-3" />
+          </Button>
+        </>
       ) : null}
     </li>
   )

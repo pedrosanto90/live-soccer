@@ -26,9 +26,18 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Uma falha de rede/DNS ao contactar o Supabase (ex.: EAI_AGAIN) não é uma
+  // falha de autenticação. Se deixássemos a excepção propagar, a request seguia
+  // sem `user` e seria redireccionada para /login — atirando o operador para
+  // fora e corrompendo qualquer server action em curso. Nesse caso, deixamos a
+  // request passar (as verificações no layout e na página voltam a validar).
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    return supabaseResponse
+  }
 
   const { pathname } = request.nextUrl
 

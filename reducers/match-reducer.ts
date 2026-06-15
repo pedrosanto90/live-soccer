@@ -16,6 +16,7 @@ export interface MatchState {
 export type MatchAction =
   | { type: 'MATCH_UPDATED'; payload: Match }
   | { type: 'EVENT_ADDED'; payload: MatchEvent }
+  | { type: 'EVENT_UPDATED'; payload: MatchEvent }
   | { type: 'EVENT_CANCELLED'; payload: string } // eventId
   | { type: 'PENALTY_ADDED'; payload: PenaltyKick }
   | { type: 'TIMER_STARTED' }
@@ -59,6 +60,14 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
       // Ignora duplicados (o operador também recebe o próprio INSERT do Realtime).
       if (state.events.some((e) => e.id === action.payload.id)) return state
       return { ...state, events: [action.payload, ...state.events] }
+
+    case 'EVENT_UPDATED':
+      return {
+        ...state,
+        events: state.events.map((e) =>
+          e.id === action.payload.id ? action.payload : e
+        ),
+      }
 
     case 'EVENT_CANCELLED':
       return {

@@ -72,7 +72,7 @@ export default async function PublicTournamentPage({
   return (
     <div>
       <header className="border-b border-border bg-background">
-        <div className="mx-auto max-w-4xl px-4 py-6">
+        <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
           {tournament.logo_url ? (
             <Image
               src={tournament.logo_url}
@@ -82,7 +82,7 @@ export default async function PublicTournamentPage({
               className="mb-3 rounded-md"
             />
           ) : null}
-          <h1 className="text-2xl font-medium">{tournament.name}</h1>
+          <h1 className="text-xl font-medium sm:text-2xl">{tournament.name}</h1>
           {tournament.description ? (
             <p className="mt-1 text-sm text-muted-foreground">
               {tournament.description}
@@ -99,9 +99,9 @@ export default async function PublicTournamentPage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6">
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
         <Tabs defaultValue="matches" className="w-full">
-          <TabsList>
+          <TabsList className="max-w-full overflow-x-auto">
             <TabsTrigger value="matches">Jogos</TabsTrigger>
             <TabsTrigger value="standings">Classificação</TabsTrigger>
             {brackets.length > 0 ? (

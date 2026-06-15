@@ -398,11 +398,21 @@ export function MatchForm({
           ) : null}
         </div>
 
-        <div className="flex justify-between border-t border-border pt-4">
-          <Button type="button" variant="ghost" onClick={() => router.back()}>
+        <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full sm:w-auto"
+            onClick={() => router.back()}
+          >
             Cancelar
           </Button>
-          <Button type="submit" disabled={isPending} data-testid="match-submit">
+          <Button
+            type="submit"
+            className="w-full sm:w-auto"
+            disabled={isPending}
+            data-testid="match-submit"
+          >
             {isPending && <Loader2 className="size-4 animate-spin" />}
             {isPending ? 'A guardar...' : matchId ? 'Guardar alterações' : 'Criar jogo'}
           </Button>
