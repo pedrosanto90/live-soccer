@@ -21,7 +21,8 @@ export default async function PublicMatchPage({
   const { matchId } = await params
 
   const match = await getMatchById(matchId)
-  if (!match) {
+  // Sem ambas as equipas (slot de bracket por preencher) não há painel a mostrar.
+  if (!match || !match.home_team || !match.away_team) {
     notFound()
   }
 

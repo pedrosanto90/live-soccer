@@ -39,8 +39,10 @@ export interface MatchRefereeLite {
 }
 
 export interface MatchWithRelations extends Match {
-  home_team: MatchTeamLite
-  away_team: MatchTeamLite
+  // Jogos de bracket podem ter slots por preencher ("A definir") até o vencedor
+  // do jogo anterior avançar, por isso as equipas são opcionais.
+  home_team: MatchTeamLite | null
+  away_team: MatchTeamLite | null
   phase: MatchPhaseLite
   group: MatchGroupLite | null
   referee: MatchRefereeLite | null
@@ -56,6 +58,9 @@ export interface MatchFilters {
   phase_id?: string
   group_id?: string
   status?: MatchStatus | MatchStatus[]
+  // Por defeito os jogos de bracket são excluídos da lista plana (vivem na vista
+  // de eliminatórias). A área de admin liga-o para os poder gerir/agendar.
+  includeBracket?: boolean
 }
 
 // Dois FKs apontam para `teams` (casa/fora), por isso os embeds são
@@ -85,10 +90,11 @@ export async function getMatchesByTournament(
     .from('matches')
     .select(MATCH_SELECT)
     .eq('tournament_id', tournamentId)
-    // Jogos de bracket vivem na vista de eliminatórias, não na lista plana de
-    // jogos — e podem ter equipas a null ("A definir"), que as linhas de jogo
-    // não sabem renderizar. Excluímo-los aqui.
-    .is('bracket_round', null)
+
+  // Por defeito os jogos de bracket vivem na vista de eliminatórias, não na lista
+  // plana — e podem ter equipas a null ("A definir"). A área de admin pede-os
+  // explicitamente para os poder gerir/agendar.
+  if (!filters?.includeBracket) query = query.is('bracket_round', null)
 
   if (filters?.phase_id) query = query.eq('phase_id', filters.phase_id)
   if (filters?.group_id) query = query.eq('group_id', filters.group_id)
@@ -100,6 +106,10 @@ export async function getMatchesByTournament(
 
   const { data, error } = await query
     .order('scheduled_at', { ascending: true, nullsFirst: false })
+    // Dentro de uma fase de bracket, ordena em árvore (1.ª ronda → final) e por
+    // posição. Para jogos sem bracket estes campos são null e não afectam.
+    .order('bracket_round', { ascending: false, nullsFirst: true })
+    .order('bracket_position', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true })
 
   if (error || !data) return []

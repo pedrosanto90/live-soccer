@@ -66,6 +66,7 @@ export default async function MatchesPage({
     getMatchesByTournament(tournamentId, {
       phase_id: phase,
       status: statusFilter,
+      includeBracket: true,
     }),
     getPhasesByTournament(tournamentId),
     getRefereesByTournament(tournamentId),

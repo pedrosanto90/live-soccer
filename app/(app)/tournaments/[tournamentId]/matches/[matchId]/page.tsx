@@ -58,6 +58,11 @@ export default async function MatchDetailPage({
   const { match: settings } = match.effective_settings
   const isCustom = match.settings_override != null
   const base = `/tournaments/${tournamentId}/matches/${matchId}`
+  // Jogo de bracket ainda à espera dos vencedores das rondas anteriores: não há
+  // equipas para gerir, mostra-se só o cabeçalho e uma nota.
+  const homeTeam = match.home_team
+  const awayTeam = match.away_team
+  const teamsReady = homeTeam != null && awayTeam != null
 
   return (
     <div className="space-y-6">
@@ -68,7 +73,7 @@ export default async function MatchDetailPage({
             {match.group ? ` · ${match.group.name}` : ''}
           </p>
           <h1 className="mt-0.5 text-xl font-medium">
-            {match.home_team.name} vs {match.away_team.name}
+            {homeTeam?.name ?? 'A definir'} vs {awayTeam?.name ?? 'A definir'}
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             {match.scheduled_at ? (
@@ -85,7 +90,7 @@ export default async function MatchDetailPage({
           </div>
         </div>
 
-        {match.status === 'scheduled' && isAdmin ? (
+        {match.status === 'scheduled' && isAdmin && match.bracket_round == null ? (
           <Button variant="outline" size="sm" asChild>
             <Link href={`${base}/edit`}>
               <Pencil className="size-3.5" />
@@ -95,20 +100,27 @@ export default async function MatchDetailPage({
         ) : null}
       </div>
 
-      <MatchProvider
-        initialMatch={match}
-        initialEvents={events}
-        initialPenalties={penalties}
-      >
-        <MatchAdminPanel
-          homeTeam={match.home_team}
-          awayTeam={match.away_team}
-          players={{ home: homePlayers, away: awayPlayers }}
-          settings={match.effective_settings}
-          isAdmin={isAdmin}
-          publicHref={`/match/${match.id}/public`}
-        />
-      </MatchProvider>
+      {teamsReady ? (
+        <MatchProvider
+          initialMatch={match}
+          initialEvents={events}
+          initialPenalties={penalties}
+        >
+          <MatchAdminPanel
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            players={{ home: homePlayers, away: awayPlayers }}
+            settings={match.effective_settings}
+            isAdmin={isAdmin}
+            publicHref={`/match/${match.id}/placar`}
+          />
+        </MatchProvider>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          As equipas deste jogo são definidas após os jogos anteriores das
+          eliminatórias. Podes agendá-lo a partir da lista de jogos.
+        </div>
+      )}
 
       <Section
         title="Configurações do jogo"

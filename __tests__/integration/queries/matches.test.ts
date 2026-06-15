@@ -46,6 +46,26 @@ describe('getMatchesByTournament', () => {
       []
     )
   })
+
+  it('exclui jogos de bracket por defeito', async () => {
+    const client = queryClient([{ data: [], error: null }])
+    vi.mocked(createClient).mockResolvedValue(client as never)
+    const { getMatchesByTournament } = await import('@/lib/queries/matches')
+    await getMatchesByTournament('t1')
+
+    const builder = vi.mocked(client.from).mock.results[0].value
+    expect(builder.is).toHaveBeenCalledWith('bracket_round', null)
+  })
+
+  it('inclui jogos de bracket quando includeBracket é true', async () => {
+    const client = queryClient([{ data: [], error: null }])
+    vi.mocked(createClient).mockResolvedValue(client as never)
+    const { getMatchesByTournament } = await import('@/lib/queries/matches')
+    await getMatchesByTournament('t1', { includeBracket: true })
+
+    const builder = vi.mocked(client.from).mock.results[0].value
+    expect(builder.is).not.toHaveBeenCalled()
+  })
 })
 
 describe('getMatchById', () => {
