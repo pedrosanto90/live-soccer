@@ -4,17 +4,16 @@ import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 
-import type { TournamentStatus } from '@/types/database'
 import type { PublicTournamentFilters } from '@/lib/queries/tournaments'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-const STATUS_OPTIONS: { value?: TournamentStatus; label: string }[] = [
-  { value: undefined, label: 'Todos' },
+// 'all' = sem filtro de estado; 'active' é o default da home.
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'Todos' },
   { value: 'active', label: 'Activos' },
   { value: 'finished', label: 'Terminados' },
-  { value: 'draft', label: 'Em preparação' },
 ]
 
 export function TournamentSearch({
@@ -30,7 +29,7 @@ export function TournamentSearch({
   const [search, setSearch] = useState(initialFilters.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const currentStatus = searchParams.get('status') ?? undefined
+  const currentStatus = searchParams.get('status') ?? 'active'
   const startsAfter = searchParams.get('after') ?? ''
   const startsBefore = searchParams.get('before') ?? ''
   const hasDateFilter = Boolean(startsAfter || startsBefore)

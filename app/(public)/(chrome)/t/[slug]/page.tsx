@@ -53,7 +53,11 @@ export default async function PublicTournamentPage({
   const { slug } = await params
 
   const tournament = await getTournamentBySlug(slug)
-  if (!tournament || tournament.visibility !== 'public') {
+  if (
+    !tournament ||
+    tournament.visibility !== 'public' ||
+    tournament.status === 'draft'
+  ) {
     notFound()
   }
 

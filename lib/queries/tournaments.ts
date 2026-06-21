@@ -137,6 +137,8 @@ export async function getPublicTournaments(
     .from('tournaments')
     .select('*, teams(count), matches(status)')
     .eq('visibility', 'public')
+    // Torneios em rascunho nunca aparecem na listagem pública.
+    .neq('status', 'draft')
 
   if (filters.search) {
     query = query.ilike('name', `%${filters.search}%`)

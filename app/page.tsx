@@ -35,9 +35,13 @@ export default async function Home({
       : Promise.resolve(null),
   ])
 
+  // 'active' é o estado por omissão, por isso não conta como filtro aplicado.
+  const statusParam = Array.isArray(params.status)
+    ? params.status[0]
+    : params.status
   const hasActiveFilters = Boolean(
     filters.search ||
-      filters.status ||
+      (statusParam && statusParam !== 'active') ||
       filters.starts_after ||
       filters.starts_before
   )
