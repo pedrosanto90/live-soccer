@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,6 +45,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Tooltip,
   TooltipContent,
@@ -96,6 +104,61 @@ const baseDefaults: TournamentInput = {
     red_card_suspension_matches: 1,
   },
   tiebreak_order: [...tiebreakCriterions],
+  daily_schedule: [],
+}
+
+type DayEntry = TournamentInput['daily_schedule'][number]
+
+// Sentinela para "sem hora" no dropdown de fim (Select não aceita valor vazio).
+const NO_TIME = '__none__'
+
+// Opções de hora em formato 24h, em incrementos de 15 minutos (00:00–23:45).
+const TIME_OPTIONS: string[] = Array.from({ length: 24 * 4 }, (_, i) => {
+  const h = String(Math.floor(i / 4)).padStart(2, '0')
+  const m = String((i % 4) * 15).padStart(2, '0')
+  return `${h}:${m}`
+})
+
+// Enumera os dias (YYYY-MM-DD) entre duas datas, inclusivo. Itera por string
+// para evitar que o fuso horário desloque o dia. `end` vazio ⇒ torneio de 1 dia.
+function enumerateDays(start: string, end?: string): string[] {
+  if (!start) return []
+  const last = end && end >= start ? end : start
+  const days: string[] = []
+  const cursor = new Date(`${start}T12:00:00`)
+  const limit = new Date(`${last}T12:00:00`)
+  while (cursor <= limit) {
+    const y = cursor.getFullYear()
+    const m = String(cursor.getMonth() + 1).padStart(2, '0')
+    const d = String(cursor.getDate()).padStart(2, '0')
+    days.push(`${y}-${m}-${d}`)
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return days
+}
+
+// Constrói o horário por dia a partir do intervalo de datas, preservando as
+// horas já introduzidas para datas coincidentes.
+function buildSchedule(
+  start: string,
+  end: string | undefined,
+  existing: DayEntry[]
+): DayEntry[] {
+  const byDate = new Map(existing.map((e) => [e.date, e]))
+  return enumerateDays(start, end).map(
+    (date) => byDate.get(date) ?? { date, start: '', end: '' }
+  )
+}
+
+// Formata uma data YYYY-MM-DD para pt-PT: "sáb., 4 jul.".
+function formatDayLabel(date: string): string {
+  const d = new Date(`${date}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return date
+  return new Intl.DateTimeFormat('pt-PT', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(d)
 }
 
 // Campo numérico reutilizável com sufixo e tooltip opcionais.
@@ -218,6 +281,7 @@ export function TournamentForm({
 }: TournamentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [scheduleOpen, setScheduleOpen] = useState(false)
 
   const form = useForm<FormInput, unknown, FormOutput>({
     resolver: zodResolver(tournamentSchema),
@@ -232,6 +296,44 @@ export function TournamentForm({
   )
 
   const tiebreakOrder = form.watch('tiebreak_order')
+  const schedule = form.watch('daily_schedule') ?? []
+
+  // Valida os campos essenciais e abre o modal de horários, reconstruindo a
+  // grelha de dias a partir das datas e preservando horas já introduzidas.
+  async function openSchedule() {
+    const ok = await form.trigger(['name', 'starts_at', 'ends_at'])
+    const startDate = form.getValues('starts_at')
+    if (!ok) return
+    if (!startDate) {
+      form.setError('starts_at', {
+        type: 'manual',
+        message: 'Define a data de início para configurar os horários.',
+      })
+      return
+    }
+    const endDate = form.getValues('ends_at')
+    form.setValue('daily_schedule', buildSchedule(startDate, endDate, schedule), {
+      shouldDirty: true,
+    })
+    setScheduleOpen(true)
+  }
+
+  function updateDay(index: number, patch: Partial<DayEntry>) {
+    const next = schedule.map((d, i) => (i === index ? { ...d, ...patch } : d))
+    form.setValue('daily_schedule', next, { shouldDirty: true })
+  }
+
+  // Submete só se todos os dias tiverem hora de início. A validação Zod cobre
+  // isto, mas damos feedback imediato dentro do modal.
+  function confirmSchedule() {
+    const missing = schedule.some((d) => !d.start)
+    if (missing) {
+      toast.error('Define a hora de início de cada dia.')
+      return
+    }
+    setScheduleOpen(false)
+    form.handleSubmit(onSubmit)()
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -270,30 +372,36 @@ export function TournamentForm({
   return (
     <TooltipProvider>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void openSchedule()
+          }}
+          className="space-y-6"
+        >
           <Tabs defaultValue="info" className="w-full">
-            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+            <TabsList className="grid h-auto! w-full grid-cols-2 gap-1 sm:grid-cols-4">
               <TabsTrigger
                 value="info"
-                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+                className="h-auto! whitespace-normal py-1.5 text-xs sm:text-sm"
               >
                 Informações
               </TabsTrigger>
               <TabsTrigger
                 value="match"
-                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+                className="h-auto! whitespace-normal py-1.5 text-xs sm:text-sm"
               >
                 Configurações do jogo
               </TabsTrigger>
               <TabsTrigger
                 value="scoring"
-                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+                className="h-auto! whitespace-normal py-1.5 text-xs sm:text-sm"
               >
                 Pontuação e desempate
               </TabsTrigger>
               <TabsTrigger
                 value="cards"
-                className="h-auto whitespace-normal py-1.5 text-xs sm:text-sm"
+                className="h-auto! whitespace-normal py-1.5 text-xs sm:text-sm"
               >
                 Regras de cartões
               </TabsTrigger>
@@ -538,6 +646,103 @@ export function TournamentForm({
           </div>
         </form>
       </Form>
+
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Horário do torneio</DialogTitle>
+            <DialogDescription>
+              Define a hora de início de cada dia. A hora prevista de fim dos
+              jogos é opcional.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {schedule.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Define as datas de início e fim para configurar os horários.
+              </p>
+            ) : (
+              schedule.map((day, index) => (
+                <div
+                  key={day.date}
+                  className="grid grid-cols-1 gap-2 rounded-md border border-border bg-surface-2 p-3 sm:grid-cols-[1fr_auto_auto] sm:items-end"
+                >
+                  <span className="text-sm font-medium capitalize">
+                    {formatDayLabel(day.date)}
+                  </span>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">
+                      Início
+                    </label>
+                    <Select
+                      value={day.start || undefined}
+                      onValueChange={(value) =>
+                        updateDay(index, { start: value })
+                      }
+                    >
+                      <SelectTrigger className="w-full sm:w-32">
+                        <SelectValue placeholder="--:--" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIME_OPTIONS.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">
+                      Fim previsto
+                    </label>
+                    <Select
+                      value={day.end ?? NO_TIME}
+                      onValueChange={(value) =>
+                        updateDay(index, {
+                          end: value === NO_TIME ? null : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-full sm:w-32">
+                        <SelectValue placeholder="--:--" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_TIME}>--:--</SelectItem>
+                        {TIME_OPTIONS.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setScheduleOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmSchedule}
+              disabled={isPending || schedule.length === 0}
+              data-testid="confirm-schedule-button"
+            >
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              {tournamentId ? 'Confirmar e guardar' : 'Confirmar e criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   )
 }

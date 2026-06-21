@@ -51,11 +51,12 @@ const defaultSettings: TournamentSettings = {
     red_card_suspension_matches: 1,
   },
   tiebreak_order: [...tiebreakCriterions],
+  daily_schedule: [],
 }
 
 type ParsedSettings = Pick<
   TournamentInput,
-  "match" | "scoring" | "cards" | "tiebreak_order"
+  "match" | "scoring" | "cards" | "tiebreak_order" | "daily_schedule"
 >
 
 // Converte o jsonb da BD para os campos do formulário, com fallbacks nos defaults.
@@ -71,6 +72,9 @@ export function parseTournamentSettings(
       Array.isArray(s.tiebreak_order) && s.tiebreak_order.length > 0
         ? (s.tiebreak_order as TiebreakerCriterion[])
         : defaultSettings.tiebreak_order,
+    daily_schedule: Array.isArray(s.daily_schedule)
+      ? s.daily_schedule
+      : defaultSettings.daily_schedule,
   }
 }
 
@@ -83,6 +87,11 @@ export function buildTournamentSettings(
     scoring: values.scoring,
     cards: values.cards,
     tiebreak_order: values.tiebreak_order,
+    daily_schedule: values.daily_schedule.map((d) => ({
+      date: d.date,
+      start: d.start,
+      end: d.end ?? null,
+    })),
   }
 }
 
@@ -278,5 +287,6 @@ export function getEffectiveSettings(
     scoring: { ...tournamentSettings.scoring, ...override.scoring },
     cards: { ...tournamentSettings.cards, ...override.cards },
     tiebreak_order: override.tiebreak_order ?? tournamentSettings.tiebreak_order,
+    daily_schedule: override.daily_schedule ?? tournamentSettings.daily_schedule,
   }
 }

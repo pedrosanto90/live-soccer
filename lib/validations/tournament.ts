@@ -22,6 +22,25 @@ const cardsSchema = z.object({
   red_card_suspension_matches: z.number().min(1).max(5).default(1),
 })
 
+// Horário de um dia do torneio: hora de início obrigatória, hora de fim
+// prevista opcional. As datas são geradas a partir do intervalo do torneio.
+const dailyScheduleEntrySchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida'),
+    start: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, 'Hora de início obrigatória'),
+    end: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, 'Hora de fim inválida')
+      .optional()
+      .nullable(),
+  })
+  .refine((d) => !d.end || d.end > d.start, {
+    message: 'A hora de fim deve ser depois da hora de início',
+    path: ['end'],
+  })
+
 export const tiebreakCriterions = [
   'points',
   'head_to_head',
@@ -54,6 +73,7 @@ export const tournamentSchema = z.object({
   scoring: scoringSchema,
   cards: cardsSchema,
   tiebreak_order: z.array(z.enum(tiebreakCriterions)).min(1),
+  daily_schedule: z.array(dailyScheduleEntrySchema).default([]),
 })
 
 export type TournamentInput = z.infer<typeof tournamentSchema>

@@ -66,6 +66,9 @@ export interface TournamentSettings {
     yellow_cards_for_suspension: number
     red_card_suspension_matches: number
   }
+  // Horário por dia do torneio. `date` é YYYY-MM-DD; `start`/`end` são HH:mm.
+  // A hora de fim é prevista (base para agendar jogos) e pode ser nula.
+  daily_schedule: { date: string; start: string; end: string | null }[]
 }
 
 // ---------------------------------------------------------------------------
