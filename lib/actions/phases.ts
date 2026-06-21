@@ -20,8 +20,18 @@ import {
   type Team as DrawTeam,
   type DrawGroup,
 } from '@/lib/draw'
+import {
+  buildMatchSlots,
+  matchDurationMinutes,
+  MATCH_GAP_MINUTES,
+} from '@/lib/scheduling'
 import type { ActionResult } from '@/types'
-import type { Group, TournamentPhase, UserRole } from '@/types/database'
+import type {
+  Group,
+  TournamentPhase,
+  TournamentSettings,
+  UserRole,
+} from '@/types/database'
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
 
@@ -437,15 +447,39 @@ export async function runDraw(
     return { success: false, error: 'Não foi possível distribuir as equipas.' }
   }
 
-  // Gera e insere os jogos (round-robin), mapeando group_index → group_id.
+  // Gera os jogos (round-robin), mapeando group_index → group_id.
   const generated = generateGroupMatches(drawn)
-  const matchRows = generated.map((m) => ({
+
+  // Agendamento automático: distribui os jogos pelo horário diário do torneio,
+  // com a folga padrão entre jogos. Continua a seguir aos jogos já agendados
+  // (offset) para não reutilizar horários ocupados.
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('settings')
+    .eq('id', tournamentId)
+    .maybeSingle()
+  const settings = (tournament?.settings ?? null) as Partial<TournamentSettings> | null
+  const { count: scheduledCount } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_id', tournamentId)
+    .not('scheduled_at', 'is', null)
+  const offset = scheduledCount ?? 0
+  const slots = buildMatchSlots(
+    settings?.daily_schedule ?? [],
+    matchDurationMinutes(settings?.match),
+    MATCH_GAP_MINUTES,
+    offset + generated.length
+  )
+
+  const matchRows = generated.map((m, i) => ({
     tournament_id: tournamentId,
     phase_id: phaseId,
     group_id: groups[m.group_index].id,
     home_team_id: m.home_team_id,
     away_team_id: m.away_team_id,
     status: 'scheduled' as const,
+    scheduled_at: slots[offset + i] ?? null,
   }))
 
   if (matchRows.length > 0) {

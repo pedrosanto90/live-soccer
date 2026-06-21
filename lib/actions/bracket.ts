@@ -14,8 +14,17 @@ import {
   getQualifiedTeams,
   type BracketSection,
 } from '@/lib/queries/bracket'
+import {
+  buildMatchSlots,
+  matchDurationMinutes,
+  MATCH_GAP_MINUTES,
+} from '@/lib/scheduling'
 import type { ActionResult } from '@/types'
-import type { TablesInsert, UserRole } from '@/types/database'
+import type {
+  TablesInsert,
+  TournamentSettings,
+  UserRole,
+} from '@/types/database'
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
 
@@ -126,6 +135,34 @@ export async function generateKnockoutBracket(
     return idByKey.get(key(slot.round / 2, slot.next_match_position)) ?? null
   }
 
+  // Agendamento automático: distribui horários pelos jogos efectivamente
+  // jogados (ignora byes), por ordem de ronda. Continua a seguir aos jogos já
+  // agendados do torneio (tipicamente a fase de grupos) para não os sobrepor.
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('settings')
+    .eq('id', phase.tournament_id)
+    .maybeSingle()
+  const settings = (tournament?.settings ?? null) as Partial<TournamentSettings> | null
+  const { count: scheduledCount } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_id', phase.tournament_id)
+    .not('scheduled_at', 'is', null)
+  const offset = scheduledCount ?? 0
+  const playable = slots.filter((s) => !s.is_bye)
+  const timeline = buildMatchSlots(
+    settings?.daily_schedule ?? [],
+    matchDurationMinutes(settings?.match),
+    MATCH_GAP_MINUTES,
+    offset + playable.length
+  )
+  const scheduledAtByKey = new Map<string, string>()
+  playable.forEach((slot, i) => {
+    const at = timeline[offset + i]
+    if (at) scheduledAtByKey.set(key(slot.round, slot.position), at)
+  })
+
   const rows: TablesInsert<'matches'>[] = slots.map((slot) => ({
     id: idByKey.get(key(slot.round, slot.position))!,
     tournament_id: phase.tournament_id,
@@ -138,6 +175,7 @@ export async function generateKnockoutBracket(
     bracket_position: slot.position,
     next_match_id: nextIdFor(slot),
     next_match_slot: slot.next_match_slot,
+    scheduled_at: scheduledAtByKey.get(key(slot.round, slot.position)) ?? null,
   }))
 
   // Byes: a equipa presente avança já para o jogo seguinte.

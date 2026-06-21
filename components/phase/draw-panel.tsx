@@ -350,6 +350,24 @@ function NumberField({
   testid: string
   onChange: (value: number) => void
 }) {
+  // Estado local em string para permitir o campo vazio durante a edição. O
+  // clamp ao intervalo [min, max] só acontece no blur — assim dá para apagar e
+  // reescrever o número livremente. Quando o valor muda por fora (ex.: clamp
+  // noutro campo) ressincroniza o draft durante o render.
+  const [draft, setDraft] = useState(String(value))
+  const [prevValue, setPrevValue] = useState(value)
+  if (value !== prevValue) {
+    setPrevValue(value)
+    setDraft(String(value))
+  }
+
+  function commit() {
+    const n = Number(draft)
+    const clamped = Number.isNaN(n) ? value : Math.min(max, Math.max(min, n))
+    onChange(clamped)
+    setDraft(String(clamped))
+  }
+
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-sm font-medium">{label}</span>
@@ -358,12 +376,10 @@ function NumberField({
         inputMode="numeric"
         min={min}
         max={max}
-        value={value}
+        value={draft}
         data-testid={testid}
-        onChange={(e) => {
-          const n = e.target.valueAsNumber
-          if (!Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)))
-        }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
       />
     </label>
   )
