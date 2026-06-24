@@ -2,7 +2,11 @@
 
 import { Hand } from 'lucide-react'
 
-import { getRoundLabel } from '@/lib/bracket'
+import {
+  getRoundLabel,
+  isThirdPlaceMatch,
+  THIRD_PLACE_LABEL,
+} from '@/lib/bracket'
 import type { BracketMatchRow } from '@/lib/queries/bracket'
 import { BracketMatchCard } from './bracket-match-card'
 
@@ -12,25 +16,44 @@ interface BracketViewProps {
 }
 
 interface RoundColumn {
-  round: number
+  key: string
+  label: string
   matches: BracketMatchRow[]
 }
 
 // Agrupa os jogos por ronda (do maior round para o menor: quartos → meias →
-// final) e ordena cada ronda por posição.
+// final) e ordena cada ronda por posição. O jogo de 3.º/4.º lugar é separado
+// numa coluna própria, colocada depois da final.
 function toColumns(matches: BracketMatchRow[]): RoundColumn[] {
+  const tree = matches.filter(
+    (m) => !isThirdPlaceMatch(m.bracket_round, m.bracket_position)
+  )
+  const thirdPlace = matches.filter((m) =>
+    isThirdPlaceMatch(m.bracket_round, m.bracket_position)
+  )
+
   const byRound = new Map<number, BracketMatchRow[]>()
-  for (const m of matches) {
+  for (const m of tree) {
     const list = byRound.get(m.bracket_round) ?? []
     list.push(m)
     byRound.set(m.bracket_round, list)
   }
-  return [...byRound.entries()]
+  const columns: RoundColumn[] = [...byRound.entries()]
     .sort((a, b) => b[0] - a[0])
     .map(([round, list]) => ({
-      round,
+      key: `round-${round}`,
+      label: getRoundLabel(round),
       matches: list.sort((a, b) => a.bracket_position - b.bracket_position),
     }))
+
+  if (thirdPlace.length > 0) {
+    columns.push({
+      key: 'third-place',
+      label: THIRD_PLACE_LABEL,
+      matches: thirdPlace,
+    })
+  }
+  return columns
 }
 
 // Vista do bracket em colunas. O espaçamento vertical (`justify-around`) dá a
@@ -51,9 +74,9 @@ export function BracketView({ matches, onMatchClick }: BracketViewProps) {
     <div>
       <div className="flex gap-4 overflow-x-auto pb-2 sm:gap-6">
         {columns.map((column) => (
-          <div key={column.round} className="flex min-w-44 flex-1 flex-col">
+          <div key={column.key} className="flex min-w-44 flex-1 flex-col">
             <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {getRoundLabel(column.round)}
+              {column.label}
             </p>
             <div className="flex flex-1 flex-col justify-around gap-4">
               {column.matches.map((match) => (

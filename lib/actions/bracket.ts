@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   generateBracket,
   computeWinner,
+  THIRD_PLACE_POSITION,
   type BracketSlot,
   type QualifiedTeam,
 } from '@/lib/bracket'
@@ -150,17 +151,40 @@ export async function generateKnockoutBracket(
     .eq('tournament_id', phase.tournament_id)
     .not('scheduled_at', 'is', null)
   const offset = scheduledCount ?? 0
-  const playable = slots.filter((s) => !s.is_bye)
+
+  // Jogo de 3.º/4.º lugar: opcional, e só quando existem duas meias-finais
+  // reais (ronda 2, sem byes) de onde saem os dois perdedores que o disputam.
+  // Com 3 equipas uma das meias é um bye e não produz perdedor — nesse caso não
+  // se cria o jogo.
+  const semis = rounds.find((r) => r.round === 2)
+  const wantsThirdPlace =
+    settings?.match?.third_place_match === true &&
+    semis != null &&
+    semis.slots.length === 2 &&
+    semis.slots.every((s) => !s.is_bye)
+  const thirdPlaceId = wantsThirdPlace ? crypto.randomUUID() : null
+  const thirdPlaceKey = key(1, THIRD_PLACE_POSITION)
+
+  // Chaves dos jogos efectivamente jogados, por ordem de agendamento. O jogo de
+  // 3.º lugar é inserido imediatamente antes da final.
+  const playableKeys = slots
+    .filter((s) => !s.is_bye)
+    .map((s) => key(s.round, s.position))
+  if (thirdPlaceId) {
+    const finalIdx = playableKeys.indexOf(key(1, 0))
+    if (finalIdx >= 0) playableKeys.splice(finalIdx, 0, thirdPlaceKey)
+    else playableKeys.push(thirdPlaceKey)
+  }
   const timeline = buildMatchSlots(
     settings?.daily_schedule ?? [],
     matchDurationMinutes(settings?.match),
     MATCH_GAP_MINUTES,
-    offset + playable.length
+    offset + playableKeys.length
   )
   const scheduledAtByKey = new Map<string, string>()
-  playable.forEach((slot, i) => {
+  playableKeys.forEach((k, i) => {
     const at = timeline[offset + i]
-    if (at) scheduledAtByKey.set(key(slot.round, slot.position), at)
+    if (at) scheduledAtByKey.set(k, at)
   })
 
   const rows: TablesInsert<'matches'>[] = slots.map((slot) => ({
@@ -190,6 +214,25 @@ export async function generateKnockoutBracket(
     else target.away_team_id = winner.team_id
   }
 
+  // Jogo de 3.º/4.º lugar: jogo terminal sem equipas definidas — os perdedores
+  // das meias-finais são colocados pelo `advanceWinner` quando cada meia termina.
+  if (thirdPlaceId) {
+    rows.push({
+      id: thirdPlaceId,
+      tournament_id: phase.tournament_id,
+      phase_id: phaseId,
+      group_id: null,
+      status: 'scheduled',
+      home_team_id: null,
+      away_team_id: null,
+      bracket_round: 1,
+      bracket_position: THIRD_PLACE_POSITION,
+      next_match_id: null,
+      next_match_slot: null,
+      scheduled_at: scheduledAtByKey.get(thirdPlaceKey) ?? null,
+    })
+  }
+
   const { error } = await supabase.from('matches').insert(rows)
   if (error) {
     return { success: false, error: 'Não foi possível gerar o bracket.' }
@@ -216,7 +259,7 @@ export async function advanceWinner(matchId: string): Promise<ActionResult> {
   const { data: match } = await supabase
     .from('matches')
     .select(
-      'tournament_id, status, home_team_id, away_team_id, home_score, away_score, home_score_extra, away_score_extra, home_penalties, away_penalties, next_match_id, next_match_slot'
+      'tournament_id, phase_id, status, home_team_id, away_team_id, home_score, away_score, home_score_extra, away_score_extra, home_penalties, away_penalties, bracket_round, bracket_position, next_match_id, next_match_slot'
     )
     .eq('id', matchId)
     .maybeSingle()
@@ -225,10 +268,6 @@ export async function advanceWinner(matchId: string): Promise<ActionResult> {
   const role = await memberRole(supabase, match.tournament_id as string, user.id)
   if (role !== 'admin' && role !== 'operator') {
     return { success: false, error: ADMIN_ONLY }
-  }
-
-  if (!match.next_match_id || !match.next_match_slot) {
-    return { success: true, data: undefined } // final ou jogo terminal
   }
 
   const winner = computeWinner({
@@ -242,19 +281,50 @@ export async function advanceWinner(matchId: string): Promise<ActionResult> {
     home_penalties: match.home_penalties,
     away_penalties: match.away_penalties,
   })
-  if (!winner) return { success: true, data: undefined }
+  if (!winner) return { success: true, data: undefined } // ainda por decidir
 
-  const patch =
-    match.next_match_slot === 'home'
-      ? { home_team_id: winner }
-      : { away_team_id: winner }
+  // Vencedor → slot do jogo seguinte (a final, para as meias). Sem jogo
+  // seguinte (final ou jogo de 3.º lugar) não há nada a propagar.
+  if (match.next_match_id && match.next_match_slot) {
+    const patch =
+      match.next_match_slot === 'home'
+        ? { home_team_id: winner }
+        : { away_team_id: winner }
 
-  const { error } = await supabase
-    .from('matches')
-    .update(patch)
-    .eq('id', match.next_match_id)
-  if (error) {
-    return { success: false, error: 'Não foi possível avançar o vencedor.' }
+    const { error } = await supabase
+      .from('matches')
+      .update(patch)
+      .eq('id', match.next_match_id)
+    if (error) {
+      return { success: false, error: 'Não foi possível avançar o vencedor.' }
+    }
+  }
+
+  // Meias-finais (ronda 2): o perdedor desce ao jogo de 3.º/4.º lugar, se
+  // existir. A meia da posição 0 ocupa o lado da casa; a da posição 1, o de fora.
+  if (match.bracket_round === 2) {
+    const loser =
+      winner === match.home_team_id ? match.away_team_id : match.home_team_id
+    const { data: thirdPlace } = await supabase
+      .from('matches')
+      .select('id')
+      .eq('phase_id', match.phase_id as string)
+      .eq('bracket_round', 1)
+      .eq('bracket_position', THIRD_PLACE_POSITION)
+      .maybeSingle()
+    if (thirdPlace && loser) {
+      const loserPatch =
+        match.bracket_position === 0
+          ? { home_team_id: loser }
+          : { away_team_id: loser }
+      const { error } = await supabase
+        .from('matches')
+        .update(loserPatch)
+        .eq('id', thirdPlace.id)
+      if (error) {
+        return { success: false, error: 'Não foi possível avançar o perdedor.' }
+      }
+    }
   }
 
   revalidatePath(`/tournaments/${match.tournament_id}/phases`)

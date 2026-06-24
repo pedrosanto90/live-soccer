@@ -55,6 +55,8 @@ export interface TournamentSettings {
     extra_time_duration_minutes: number
     max_fouls_per_team_per_half: number
     penalty_shootout_kicks: number
+    // Disputa um jogo de 3.º/4.º lugar entre os perdedores das meias-finais.
+    third_place_match: boolean
   }
   scoring: {
     points_win: number

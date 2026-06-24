@@ -40,6 +40,7 @@ const defaultSettings: TournamentSettings = {
     extra_time_duration_minutes: 5,
     max_fouls_per_team_per_half: 5,
     penalty_shootout_kicks: 5,
+    third_place_match: false,
   },
   scoring: {
     points_win: 3,

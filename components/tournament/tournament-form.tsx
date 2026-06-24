@@ -36,6 +36,7 @@ import { createTournament, updateTournament } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -93,6 +94,7 @@ const baseDefaults: TournamentInput = {
     extra_time_duration_minutes: 5,
     max_fouls_per_team_per_half: 5,
     penalty_shootout_kicks: 5,
+    third_place_match: false,
   },
   scoring: {
     points_win: 3,
@@ -545,6 +547,27 @@ export function TournamentForm({
                 label="Pontapés de penálti"
                 min={3}
                 max={10}
+              />
+              <FormField
+                control={form.control}
+                name="match.third_place_match"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4 rounded-md border border-border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Jogo de 3.º e 4.º lugar</FormLabel>
+                      <FormDescription>
+                        Disputa um jogo entre os perdedores das meias-finais
+                        para definir o 3.º classificado.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
               />
             </TabsContent>
 

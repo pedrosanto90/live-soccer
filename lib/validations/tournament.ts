@@ -9,6 +9,7 @@ const matchSettingsSchema = z.object({
   extra_time_duration_minutes: z.number().min(1).max(20).default(5),
   max_fouls_per_team_per_half: z.number().min(1).max(10).default(5),
   penalty_shootout_kicks: z.number().min(3).max(10).default(5),
+  third_place_match: z.boolean().default(false),
 })
 
 const scoringSchema = z.object({

@@ -1,5 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { computeWinner, getRoundLabel } from '@/lib/bracket'
+import {
+  computeWinner,
+  getRoundLabel,
+  isThirdPlaceMatch,
+  THIRD_PLACE_LABEL,
+} from '@/lib/bracket'
 import { sortStandings, type StandingRow } from '@/lib/standings'
 import { getStandingsByTournament } from '@/lib/queries/standings'
 import type {
@@ -276,10 +281,16 @@ export async function getTournamentReportData(
       }
     }
 
-    // Eliminatórias: jogos agrupados por bracket_round.
+    // Eliminatórias: jogos agrupados por bracket_round. O jogo de 3.º/4.º lugar
+    // sai numa "ronda" própria (sentinela 0), para não se misturar com a final.
     const roundsMap = new Map<number, MatchResult[]>()
+    const thirdPlaceMatches: MatchResult[] = []
     for (const m of phaseMatches) {
       if (m.bracket_round == null) continue
+      if (isThirdPlaceMatch(m.bracket_round, m.bracket_position)) {
+        thirdPlaceMatches.push(toMatchResult(m))
+        continue
+      }
       const list = roundsMap.get(m.bracket_round) ?? []
       list.push(toMatchResult(m))
       roundsMap.set(m.bracket_round, list)
@@ -288,9 +299,16 @@ export async function getTournamentReportData(
       ([round, matches]) => ({
         round,
         label: getRoundLabel(round),
-        matches: matches.sort((a, b) => a.scheduled_at?.localeCompare(b.scheduled_at ?? '') ?? 0),
+        matches: matches.sort(byScheduledAt),
       })
     )
+    if (thirdPlaceMatches.length > 0) {
+      knockoutRounds.push({
+        round: 0,
+        label: THIRD_PLACE_LABEL,
+        matches: thirdPlaceMatches,
+      })
+    }
 
     return {
       id: phase.id,
@@ -386,28 +404,42 @@ export async function getTournamentReportData(
         b.goals_for - a.goals_for
     )
 
-  // Campeão/vice a partir da final (jogo de eliminatória com bracket_round = 1).
-  const finalMatch = finishedMatches.find((m) => m.bracket_round === 1)
-  let podiumOrder: string[] = []
-  if (finalMatch && finalMatch.home_team_id && finalMatch.away_team_id) {
+  // Vencedor + perdedor de um jogo de eliminatória terminado (ou null se ainda
+  // não estiver decidido). Usado para o pódio a partir da final e do 3.º lugar.
+  const decideMatch = (
+    m: RawReportMatch | undefined
+  ): [string, string] | null => {
+    if (!m || !m.home_team_id || !m.away_team_id) return null
     const winner = computeWinner({
       status: 'finished',
-      home_team_id: finalMatch.home_team_id,
-      away_team_id: finalMatch.away_team_id,
-      home_score: finalMatch.home_score,
-      away_score: finalMatch.away_score,
-      home_score_extra: finalMatch.home_score_extra,
-      away_score_extra: finalMatch.away_score_extra,
-      home_penalties: finalMatch.home_penalties,
-      away_penalties: finalMatch.away_penalties,
+      home_team_id: m.home_team_id,
+      away_team_id: m.away_team_id,
+      home_score: m.home_score,
+      away_score: m.away_score,
+      home_score_extra: m.home_score_extra,
+      away_score_extra: m.away_score_extra,
+      home_penalties: m.home_penalties,
+      away_penalties: m.away_penalties,
     })
-    if (winner) {
-      const loser =
-        winner === finalMatch.home_team_id
-          ? finalMatch.away_team_id
-          : finalMatch.home_team_id
-      podiumOrder = [winner, loser]
-    }
+    if (!winner) return null
+    const loser = winner === m.home_team_id ? m.away_team_id : m.home_team_id
+    return [winner, loser]
+  }
+
+  // Pódio: 1.º/2.º a partir da final (round 1, posição 0); 3.º/4.º a partir do
+  // jogo de atribuição do 3.º lugar, quando existe e terminou.
+  const finalMatch = finishedMatches.find(
+    (m) => m.bracket_round === 1 && m.bracket_position === 0
+  )
+  const thirdPlaceMatch = finishedMatches.find((m) =>
+    isThirdPlaceMatch(m.bracket_round, m.bracket_position)
+  )
+  let podiumOrder: string[] = []
+  const finalResult = decideMatch(finalMatch)
+  if (finalResult) {
+    podiumOrder = [...finalResult]
+    const thirdResult = decideMatch(thirdPlaceMatch)
+    if (thirdResult) podiumOrder.push(...thirdResult)
   }
 
   // Combina o pódio (se houver final) com o resto ordenado pelos agregados.

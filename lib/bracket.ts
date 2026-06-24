@@ -50,6 +50,25 @@ export function getRoundLabel(round: number): string {
   return ROUND_LABELS[round] ?? `Ronda de ${round * 2}`
 }
 
+// Rótulo do jogo de atribuição do 3.º lugar.
+export const THIRD_PLACE_LABEL = '3.º e 4.º lugar'
+
+// Posição reservada ao jogo de 3.º/4.º lugar dentro da ronda final. A final
+// ocupa a posição 0; o jogo de 3.º lugar (disputado pelos perdedores das
+// meias-finais) ocupa a posição 1, distinguindo-o sem colunas adicionais na BD.
+export const THIRD_PLACE_POSITION = 1
+
+/**
+ * Verdadeiro se o jogo (identificado por ronda + posição) é o jogo de 3.º/4.º
+ * lugar: vive na ronda da final (`round === 1`) mas na posição reservada.
+ */
+export function isThirdPlaceMatch(
+  round: number | null,
+  position: number | null
+): boolean {
+  return round === 1 && position === THIRD_PLACE_POSITION
+}
+
 // ─── Cálculos de dimensão ───────────────────────────────────────────────────
 
 /**
