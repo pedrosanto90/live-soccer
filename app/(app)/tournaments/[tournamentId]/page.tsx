@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { CalendarDays, CheckCircle, Play, Users } from 'lucide-react'
+import { CalendarDays, CheckCircle, Download, Play, Users } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
 import { getTournamentById, getTournamentStats } from '@/lib/queries/tournaments'
@@ -68,6 +68,18 @@ export default async function TournamentOverviewPage({
             ) : null}
             {tournament.status === 'active' ? (
               <FinishTournamentButton tournamentId={tournamentId} />
+            ) : null}
+            {tournament.status === 'finished' ? (
+              <Button variant="outline" asChild>
+                <a
+                  href={`/api/tournaments/${tournamentId}/report`}
+                  download
+                  target="_blank"
+                >
+                  <Download className="size-3.5" />
+                  Ficha do torneio (PDF)
+                </a>
+              </Button>
             ) : null}
           </>
         ) : null}

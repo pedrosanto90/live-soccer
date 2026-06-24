@@ -3,7 +3,14 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Calendar, ExternalLink, MoreHorizontal, Pencil, XCircle } from 'lucide-react'
+import {
+  Calendar,
+  Download,
+  ExternalLink,
+  MoreHorizontal,
+  Pencil,
+  XCircle,
+} from 'lucide-react'
 
 import { cn, formatDate } from '@/lib/utils'
 import { updateTournamentStatus } from '@/lib/actions/tournaments'
@@ -109,6 +116,21 @@ export function TournamentCard({ tournament }: { tournament: TournamentWithStats
                 <ExternalLink className="size-4" />
                 Ver página pública
               </DropdownMenuItem>
+
+              {tournament.status === 'finished' ? (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    window.open(
+                      `/api/tournaments/${tournament.id}/report`,
+                      '_blank',
+                      'noopener'
+                    )
+                  }
+                >
+                  <Download className="size-4" />
+                  Ficha do torneio (PDF)
+                </DropdownMenuItem>
+              ) : null}
 
               {tournament.status === 'active' ? (
                 <>
