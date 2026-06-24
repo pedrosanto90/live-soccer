@@ -4,7 +4,14 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { CalendarClock, MoreHorizontal, Pencil, Settings2, Trash2 } from 'lucide-react'
+import {
+  CalendarClock,
+  Download,
+  MoreHorizontal,
+  Pencil,
+  Settings2,
+  Trash2,
+} from 'lucide-react'
 
 import { deleteMatch } from '@/lib/actions/matches'
 import type {
@@ -50,6 +57,7 @@ export function MatchRow({ match, tournamentId, referees, isAdmin }: MatchRowPro
 
   const base = `/tournaments/${tournamentId}/matches/${match.id}`
   const isScheduled = match.status === 'scheduled'
+  const isFinished = match.status === 'finished'
   const showAdminActions = isScheduled || match.status === 'in_progress'
   // Jogos de bracket são geridos pela árvore de eliminatórias: as equipas vêm do
   // avanço automático (não se editam) e apagar um partiria a árvore (usa-se
@@ -149,7 +157,7 @@ export function MatchRow({ match, tournamentId, referees, isAdmin }: MatchRowPro
             </Button>
           ) : null}
 
-          {isAdmin && isScheduled ? (
+          {(isAdmin && isScheduled) || isFinished ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -162,11 +170,25 @@ export function MatchRow({ match, tournamentId, referees, isAdmin }: MatchRowPro
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setScheduleOpen(true)}>
-                  <CalendarClock className="size-4" />
-                  Agendar
-                </DropdownMenuItem>
-                {!isBracket ? (
+                {isFinished ? (
+                  <DropdownMenuItem asChild>
+                    <a
+                      href={`/api/matches/${match.id}/report`}
+                      download
+                      target="_blank"
+                    >
+                      <Download className="size-4" />
+                      Ficha de jogo (PDF)
+                    </a>
+                  </DropdownMenuItem>
+                ) : null}
+                {isAdmin && isScheduled ? (
+                  <DropdownMenuItem onSelect={() => setScheduleOpen(true)}>
+                    <CalendarClock className="size-4" />
+                    Agendar
+                  </DropdownMenuItem>
+                ) : null}
+                {isAdmin && isScheduled && !isBracket ? (
                   <DropdownMenuItem onSelect={() => router.push(`${base}/edit`)}>
                     <Pencil className="size-4" />
                     Editar

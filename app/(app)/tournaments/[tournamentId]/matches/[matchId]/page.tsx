@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { MapPin, Pencil } from 'lucide-react'
+import { Download, MapPin, Pencil } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -90,14 +90,25 @@ export default async function MatchDetailPage({
           </div>
         </div>
 
-        {match.status === 'scheduled' && isAdmin && match.bracket_round == null ? (
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`${base}/edit`}>
-              <Pencil className="size-3.5" />
-              Editar
-            </Link>
-          </Button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {match.status === 'finished' ? (
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/matches/${match.id}/report`} download target="_blank">
+                <Download className="size-3.5" />
+                Ficha de jogo (PDF)
+              </a>
+            </Button>
+          ) : null}
+
+          {match.status === 'scheduled' && isAdmin && match.bracket_round == null ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`${base}/edit`}>
+                <Pencil className="size-3.5" />
+                Editar
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {teamsReady ? (
