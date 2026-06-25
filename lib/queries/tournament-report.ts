@@ -465,10 +465,13 @@ export async function getTournamentReportData(
     }))
 
   // ── Goleadores ────────────────────────────────────────────────────────────
-  // Só golos marcados (os autogolos não creditam o jogador). Top 10.
+  // Golos creditados ao jogador: golo de jogo + penálti convertido durante o
+  // jogo (ambos contam para o marcador). Os autogolos não creditam o jogador e
+  // os penáltis do desempate (penalty_kicks) não entram. Top 10.
   const scorerMap = new Map<string, TopScorer>()
   for (const e of events) {
-    if (e.event_type !== 'goal' || !e.player_name) continue
+    const isGoal = e.event_type === 'goal' || e.event_type === 'penalty_scored'
+    if (!isGoal || !e.player_name) continue
     const key = `${e.team_id}::${e.player_name}`
     const existing = scorerMap.get(key)
     if (existing) {
