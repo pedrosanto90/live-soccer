@@ -1,12 +1,14 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { Hand } from 'lucide-react'
-
 import {
-  getRoundLabel,
-  isThirdPlaceMatch,
-  THIRD_PLACE_LABEL,
-} from '@/lib/bracket'
+  SingleEliminationBracket,
+  SVGViewer,
+  type MatchComponentProps,
+} from '@g-loot/react-tournament-brackets'
+
+import { toBracketMatches, type LibraryMatch } from '@/lib/bracket'
 import type { BracketMatchRow } from '@/lib/queries/bracket'
 import { BracketMatchCard } from './bracket-match-card'
 
@@ -15,54 +17,32 @@ interface BracketViewProps {
   onMatchClick?: (matchId: string) => void
 }
 
-interface RoundColumn {
-  key: string
-  label: string
-  matches: BracketMatchRow[]
-}
+// Dimensões da caixa de cada jogo (em coordenadas SVG). `boxHeight` cobre as
+// duas linhas (casa/fora) do cartão; `width` espelha a largura w-44 antiga.
+const BOX_WIDTH = 176
+const BOX_HEIGHT = 56
 
-// Agrupa os jogos por ronda (do maior round para o menor: quartos → meias →
-// final) e ordena cada ronda por posição. O jogo de 3.º/4.º lugar é separado
-// numa coluna própria, colocada depois da final.
-function toColumns(matches: BracketMatchRow[]): RoundColumn[] {
-  const tree = matches.filter(
-    (m) => !isThirdPlaceMatch(m.bracket_round, m.bracket_position)
-  )
-  const thirdPlace = matches.filter((m) =>
-    isThirdPlaceMatch(m.bracket_round, m.bracket_position)
-  )
-
-  const byRound = new Map<number, BracketMatchRow[]>()
-  for (const m of tree) {
-    const list = byRound.get(m.bracket_round) ?? []
-    list.push(m)
-    byRound.set(m.bracket_round, list)
-  }
-  const columns: RoundColumn[] = [...byRound.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([round, list]) => ({
-      key: `round-${round}`,
-      label: getRoundLabel(round),
-      matches: list.sort((a, b) => a.bracket_position - b.bracket_position),
-    }))
-
-  if (thirdPlace.length > 0) {
-    columns.push({
-      key: 'third-place',
-      label: THIRD_PLACE_LABEL,
-      matches: thirdPlace,
-    })
-  }
-  return columns
-}
-
-// Vista do bracket em colunas. O espaçamento vertical (`justify-around`) dá a
-// leitura em árvore sem desenhar linhas — robusto em qualquer largura e fiel ao
-// design system.
+// Vista do bracket de eliminatórias usando `@g-loot/react-tournament-brackets`,
+// que trata das linhas de conexão, do espaçamento proporcional entre rondas e
+// do pan/zoom. O cartão de cada jogo é o nosso `BracketMatchCard` (design
+// system). O jogo de 3.º/4.º lugar — não suportado pela biblioteca — é
+// renderizado à parte por baixo do quadro.
 export function BracketView({ matches, onMatchClick }: BracketViewProps) {
-  const columns = toColumns(matches)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(800)
 
-  if (columns.length === 0) {
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (w) setContainerWidth(w)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  if (matches.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         Ainda não há jogos no bracket.
@@ -70,31 +50,97 @@ export function BracketView({ matches, onMatchClick }: BracketViewProps) {
     )
   }
 
+  const { mainMatches, thirdPlaceMatch } = toBracketMatches(matches)
+
   return (
-    <div>
-      <div className="flex gap-4 overflow-x-auto pb-2 sm:gap-6">
-        {columns.map((column) => (
-          <div key={column.key} className="flex min-w-44 flex-1 flex-col">
-            <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {column.label}
-            </p>
-            <div className="flex flex-1 flex-col justify-around gap-4">
-              {column.matches.map((match) => (
-                <BracketMatchCard
-                  key={match.id}
-                  match={match}
-                  onClick={onMatchClick ? () => onMatchClick(match.id) : undefined}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      {columns.length > 1 ? (
-        <p className="mt-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground sm:hidden">
-          <Hand className="size-3" /> Arrasta para navegar no bracket
-        </p>
+    <div ref={containerRef} className="w-full overflow-hidden">
+      <SingleEliminationBracket
+        matches={mainMatches}
+        matchComponent={({
+          match,
+          topParty,
+          bottomParty,
+          topWon,
+          bottomWon,
+        }: MatchComponentProps) => (
+          <BracketMatchCard
+            match={match}
+            topParty={topParty}
+            bottomParty={bottomParty}
+            topWon={topWon}
+            bottomWon={bottomWon}
+            onSelect={onMatchClick}
+          />
+        )}
+        svgWrapper={({ children, bracketWidth, bracketHeight, ...props }) => (
+          <SVGViewer
+            bracketWidth={bracketWidth}
+            bracketHeight={bracketHeight}
+            width={containerWidth}
+            height={bracketHeight}
+            SVGBackground="transparent"
+            background="transparent"
+            miniatureProps={{ position: 'none' }}
+            {...props}
+          >
+            {children}
+          </SVGViewer>
+        )}
+        options={{
+          style: {
+            width: BOX_WIDTH,
+            boxHeight: BOX_HEIGHT,
+            canvasPadding: 12,
+            spaceBetweenColumns: 44,
+            spaceBetweenRows: 24,
+            connectorColor: 'var(--border)',
+            connectorColorHighlight: 'var(--primary)',
+            roundHeader: {
+              isShown: true,
+              backgroundColor: 'transparent',
+              fontColor: 'var(--muted-foreground)',
+              fontFamily: 'var(--font-inter, system-ui)',
+              fontSize: 11,
+            },
+          },
+        }}
+      />
+
+      {thirdPlaceMatch ? (
+        <ThirdPlaceCard match={thirdPlaceMatch} onSelect={onMatchClick} />
       ) : null}
+
+      <p className="mt-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground sm:hidden">
+        <Hand className="size-3" /> Arrasta para navegar no bracket
+      </p>
+    </div>
+  )
+}
+
+// Jogo de atribuição do 3.º lugar, mostrado por baixo do quadro principal.
+function ThirdPlaceCard({
+  match,
+  onSelect,
+}: {
+  match: LibraryMatch
+  onSelect?: (matchId: string) => void
+}) {
+  const [top, bottom] = match.participants
+  return (
+    <div className="mt-4 flex flex-col items-start gap-2">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {match.tournamentRoundText}
+      </p>
+      <div className="h-14 w-44">
+        <BracketMatchCard
+          match={match}
+          topParty={top}
+          bottomParty={bottom}
+          topWon={top.isWinner}
+          bottomWon={bottom.isWinner}
+          onSelect={onSelect}
+        />
+      </div>
     </div>
   )
 }
