@@ -3,6 +3,7 @@
 // entre a pré-visualização e a Server Action que persiste o bracket.
 
 import type { MatchStatus } from '@/types/database'
+import type { BracketMatchRow, BracketTeamLite } from '@/lib/queries/bracket'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
@@ -234,4 +235,98 @@ export function computeWinner(m: BracketScore): string | null {
   if (m.home_penalties > m.away_penalties) return m.home_team_id
   if (m.away_penalties > m.home_penalties) return m.away_team_id
   return null
+}
+
+// ─── Adaptação para @g-loot/react-tournament-brackets ────────────────────────
+
+// Formato de jogo esperado por `@g-loot/react-tournament-brackets`. Definido
+// localmente (sem importar a biblioteca) para manter este módulo puro; é
+// estruturalmente compatível com o `MatchType` da biblioteca.
+export interface LibraryMatch {
+  id: string
+  name: string
+  nextMatchId: string | null
+  tournamentRoundText: string
+  startTime: string
+  // 'DONE' = terminado, 'SCORE_DONE' = a decorrer (ao vivo), 'NO_PARTY' = por
+  // jogar. São os estados que a biblioteca usa para o destaque visual.
+  state: 'DONE' | 'SCORE_DONE' | 'NO_PARTY'
+  participants: Array<{
+    id: string
+    name: string
+    resultText: string | null
+    isWinner: boolean
+    status: string | null
+  }>
+}
+
+function convertMatch(
+  match: BracketMatchRow,
+  labelOverride?: string
+): LibraryMatch {
+  const isFinished = match.status === 'finished'
+  const showScore = match.status !== 'scheduled'
+
+  let state: LibraryMatch['state'] = 'NO_PARTY'
+  if (isFinished) state = 'DONE'
+  else if (match.status !== 'scheduled' && match.status !== 'cancelled') {
+    state = 'SCORE_DONE'
+  }
+
+  const roundLabel = labelOverride ?? getRoundLabel(match.bracket_round)
+  const name = labelOverride
+    ? labelOverride
+    : `${roundLabel} — Jogo ${match.bracket_position + 1}`
+
+  const toParticipant = (
+    team: BracketTeamLite | null,
+    score: number,
+    fallbackId: string
+  ): LibraryMatch['participants'][number] => ({
+    id: team?.id ?? fallbackId,
+    name: team ? team.short_name ?? team.name : 'A definir',
+    resultText: showScore ? String(score) : null,
+    isWinner: match.winner_team_id != null && team?.id === match.winner_team_id,
+    status: null,
+  })
+
+  return {
+    id: match.id,
+    name,
+    nextMatchId: match.next_match_id,
+    tournamentRoundText: roundLabel,
+    startTime: '',
+    state,
+    participants: [
+      toParticipant(match.home_team, match.home_score, `tbd-home-${match.id}`),
+      toParticipant(match.away_team, match.away_score, `tbd-away-${match.id}`),
+    ],
+  }
+}
+
+/**
+ * Converte os jogos do bracket (formato da BD) para o formato da biblioteca
+ * `@g-loot/react-tournament-brackets`. O jogo de 3.º/4.º lugar — identificado
+ * por `isThirdPlaceMatch` (vive na ronda da final, posição reservada) — é
+ * separado dos restantes, pois a biblioteca não o suporta nativamente e é
+ * renderizado à parte.
+ */
+export function toBracketMatches(matches: BracketMatchRow[]): {
+  mainMatches: LibraryMatch[]
+  thirdPlaceMatch: LibraryMatch | null
+} {
+  const mainMatchesRaw = matches.filter(
+    (m) => !isThirdPlaceMatch(m.bracket_round, m.bracket_position)
+  )
+  const thirdPlaceRaw =
+    matches.find((m) =>
+      isThirdPlaceMatch(m.bracket_round, m.bracket_position)
+    ) ?? null
+
+  return {
+    mainMatches: mainMatchesRaw.map((m) => convertMatch(m)),
+    thirdPlaceMatch: thirdPlaceRaw
+      ? convertMatch(thirdPlaceRaw, THIRD_PLACE_LABEL)
+      : null,
+  }
 }
