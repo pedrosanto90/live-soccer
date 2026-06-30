@@ -1,10 +1,13 @@
 import { z } from 'zod'
 
+import { TIERS } from '@/lib/tiers'
+
 // Schemas de validação de equipas e jogadores, partilhados entre as Server
 // Actions e os formulários client-side (react-hook-form).
 
 export const teamSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(60),
+  tier: z.enum(TIERS).default('seniors'),
   short_name: z
     .string()
     .max(5, 'Abreviatura deve ter no máximo 5 caracteres')

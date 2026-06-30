@@ -61,6 +61,8 @@ export async function createTournament(
       starts_at: parsed.data.starts_at || null,
       ends_at: parsed.data.ends_at || null,
       settings: buildTournamentSettings(parsed.data),
+      multi_tier: parsed.data.multi_tier,
+      tier_schedule: parsed.data.tier_schedule,
     })
     .select('id')
     .single()
@@ -116,6 +118,8 @@ export async function updateTournament(
       starts_at: parsed.data.starts_at || null,
       ends_at: parsed.data.ends_at || null,
       settings: buildTournamentSettings(parsed.data),
+      multi_tier: parsed.data.multi_tier,
+      tier_schedule: parsed.data.tier_schedule,
     })
     .eq('id', id)
     .select('*')

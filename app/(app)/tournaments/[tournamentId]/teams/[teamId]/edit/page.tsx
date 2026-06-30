@@ -41,8 +41,15 @@ export default async function EditTeamPage({
     redirect(`/tournaments/${tournamentId}/teams/${teamId}`)
   }
 
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('multi_tier')
+    .eq('id', tournamentId)
+    .maybeSingle()
+
   const defaultValues: Partial<TeamInput> = {
     name: team.name,
+    tier: team.tier,
     short_name: team.short_name ?? '',
     color_primary: team.color_primary,
     color_secondary: team.color_secondary,
@@ -55,6 +62,7 @@ export default async function EditTeamPage({
         tournamentId={tournamentId}
         defaultValues={defaultValues}
         teamId={team.id}
+        multiTier={tournament?.multi_tier ?? false}
       />
     </div>
   )

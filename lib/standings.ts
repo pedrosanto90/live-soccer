@@ -1,4 +1,4 @@
-import type { TiebreakerCriterion } from '@/types/database'
+import type { TeamTier, TiebreakerCriterion } from '@/types/database'
 
 export interface StandingTeam {
   id: string
@@ -7,6 +7,7 @@ export interface StandingTeam {
   color_primary: string
   color_secondary: string
   logo_url: string | null
+  tier: TeamTier
 }
 
 export interface StandingRow {

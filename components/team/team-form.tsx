@@ -11,8 +11,16 @@ import type { Control } from 'react-hook-form'
 
 import { teamSchema, type TeamInput } from '@/lib/validations/team'
 import { createTeam, updateTeam } from '@/lib/actions/teams'
+import { TIERS, TIER_LABELS } from '@/lib/tiers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +40,9 @@ interface TeamFormProps {
   tournamentId: string
   defaultValues?: Partial<TeamInput>
   teamId?: string
+  // Só os torneios multi-escalão mostram o selector de escalão. Em mono-escalão
+  // o escalão fica fixo ('seniors') e oculto.
+  multiTier?: boolean
 }
 
 type FormInput = z.input<typeof teamSchema>
@@ -40,6 +51,7 @@ type FormControlType = Control<FormInput, unknown, FormOutput>
 
 const baseDefaults: TeamInput = {
   name: '',
+  tier: 'seniors',
   short_name: '',
   color_primary: '#000000',
   color_secondary: '#ffffff',
@@ -86,7 +98,12 @@ function ColorField({
   )
 }
 
-export function TeamForm({ tournamentId, defaultValues, teamId }: TeamFormProps) {
+export function TeamForm({
+  tournamentId,
+  defaultValues,
+  teamId,
+  multiTier = false,
+}: TeamFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -145,6 +162,33 @@ export function TeamForm({ tournamentId, defaultValues, teamId }: TeamFormProps)
               </FormItem>
             )}
           />
+
+          {multiTier ? (
+            <FormField
+              control={form.control}
+              name="tier"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Escalão</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full" data-testid="team-tier">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {TIERS.map((tier) => (
+                        <SelectItem key={tier} value={tier}>
+                          {TIER_LABELS[tier]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : null}
 
           <FormField
             control={form.control}

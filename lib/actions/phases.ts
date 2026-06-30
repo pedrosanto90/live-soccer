@@ -20,6 +20,7 @@ import {
   type Team as DrawTeam,
   type DrawGroup,
 } from '@/lib/draw'
+import { TIER_LABELS, TIER_ORDER, type Tier } from '@/lib/tiers'
 import {
   buildMatchSlots,
   matchDurationMinutes,
@@ -317,6 +318,67 @@ export async function deleteGroup(groupId: string): Promise<ActionResult> {
 // Sorteio
 // ---------------------------------------------------------------------------
 
+// Gera os grupos de um conjunto de equipas a partir de uma configuração. Quando
+// `labelPrefix` é fornecido (torneio multi-escalão), os nomes dos grupos são
+// prefixados com o escalão ("Seniores — Grupo A") e as mensagens de erro também.
+// Função pura: valida requisitos e devolve os grupos sorteados ou um erro.
+function buildTierGroups(
+  teams: DrawTeam[],
+  cfg: {
+    mode: 'random' | 'seeded'
+    seeds?: string[]
+    num_groups: number
+    teams_per_group: number
+  },
+  labelPrefix: string | null
+): { groups: DrawGroup[] } | { error: string } {
+  const prefix = labelPrefix ? `${labelPrefix}: ` : ''
+
+  const requirements = validateDrawRequirements(
+    teams.length,
+    cfg.num_groups,
+    cfg.teams_per_group
+  )
+  if (!requirements.valid) {
+    return { error: prefix + (requirements.error ?? 'Configuração inválida.') }
+  }
+
+  const baseNames = generateGroupNames(cfg.num_groups)
+  const groupNames = labelPrefix
+    ? baseNames.map((n) => `${labelPrefix} — ${n}`)
+    : baseNames
+
+  try {
+    if (cfg.mode === 'seeded') {
+      const seedIds = cfg.seeds ?? []
+      if (seedIds.length !== cfg.num_groups) {
+        return { error: prefix + 'Escolhe uma cabeça de série para cada grupo.' }
+      }
+      const byId = new Map(teams.map((t) => [t.id, t]))
+      const seeds: DrawTeam[] = []
+      for (const id of seedIds) {
+        const team = byId.get(id)
+        if (!team) return { error: prefix + 'Cabeça de série inválida.' }
+        seeds.push(team)
+      }
+      return {
+        groups: seededDraw(
+          teams,
+          seeds,
+          cfg.num_groups,
+          cfg.teams_per_group,
+          groupNames
+        ),
+      }
+    }
+    return {
+      groups: randomDraw(teams, cfg.num_groups, cfg.teams_per_group, groupNames),
+    }
+  } catch {
+    return { error: prefix + 'Não foi possível gerar o sorteio.' }
+  }
+}
+
 export async function runDraw(
   phaseId: string,
   config: DrawConfigInput
@@ -358,61 +420,59 @@ export async function runDraw(
     }
   }
 
-  // Carrega todas as equipas do torneio.
+  // Carrega todas as equipas do torneio (com o escalão para o sorteio
+  // multi-escalão).
   const { data: teamsData, error: teamsError } = await supabase
     .from('teams')
-    .select('id, name')
+    .select('id, name, tier')
     .eq('tournament_id', tournamentId)
     .order('name', { ascending: true })
 
   if (teamsError || !teamsData) {
     return { success: false, error: 'Não foi possível carregar as equipas.' }
   }
-  const teams = teamsData as DrawTeam[]
+  const teams = teamsData as (DrawTeam & { tier: Tier })[]
 
-  // Valida requisitos.
-  const requirements = validateDrawRequirements(
-    teams.length,
-    cfg.num_groups,
-    cfg.teams_per_group
-  )
-  if (!requirements.valid) {
-    return { success: false, error: requirements.error ?? 'Configuração inválida.' }
-  }
-
-  // Executa o sorteio.
-  const groupNames = generateGroupNames(cfg.num_groups)
+  // O sorteio é feito por escalão quando há configuração por escalão (torneio
+  // multi-escalão), garantindo que equipas de escalões diferentes nunca ficam
+  // no mesmo grupo. Caso contrário, faz-se um único sorteio sobre todas as
+  // equipas (torneio mono-escalão). Os grupos resultantes são achatados num só
+  // array ordenado — o round-robin nunca cruza grupos, logo nem escalões.
   let drawn: DrawGroup[]
-  try {
-    if (cfg.mode === 'seeded') {
-      const seedIds = cfg.seeds ?? []
-      if (seedIds.length !== cfg.num_groups) {
-        return {
-          success: false,
-          error: 'Escolhe uma cabeça de série para cada grupo.',
-        }
-      }
-      const byId = new Map(teams.map((t) => [t.id, t]))
-      const seeds: DrawTeam[] = []
-      for (const id of seedIds) {
-        const team = byId.get(id)
-        if (!team) {
-          return { success: false, error: 'Cabeça de série inválida.' }
-        }
-        seeds.push(team)
-      }
-      drawn = seededDraw(
-        teams,
-        seeds,
-        cfg.num_groups,
-        cfg.teams_per_group,
-        groupNames
+  if (cfg.tiers && cfg.tiers.length > 0) {
+    const tierConfigs = [...cfg.tiers].sort(
+      (a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]
+    )
+    drawn = []
+    for (const tierCfg of tierConfigs) {
+      const tierTeams = teams.filter((t) => t.tier === tierCfg.tier)
+      const result = buildTierGroups(
+        tierTeams,
+        tierCfg,
+        TIER_LABELS[tierCfg.tier]
       )
-    } else {
-      drawn = randomDraw(teams, cfg.num_groups, cfg.teams_per_group, groupNames)
+      if ('error' in result) return { success: false, error: result.error }
+      drawn.push(...result.groups)
     }
-  } catch {
-    return { success: false, error: 'Não foi possível gerar o sorteio.' }
+    if (drawn.length === 0) {
+      return { success: false, error: 'Configuração inválida.' }
+    }
+  } else {
+    if (cfg.num_groups == null || cfg.teams_per_group == null || !cfg.mode) {
+      return { success: false, error: 'Configuração inválida.' }
+    }
+    const result = buildTierGroups(
+      teams,
+      {
+        mode: cfg.mode,
+        seeds: cfg.seeds,
+        num_groups: cfg.num_groups,
+        teams_per_group: cfg.teams_per_group,
+      },
+      null
+    )
+    if ('error' in result) return { success: false, error: result.error }
+    drawn = result.groups
   }
 
   // Persiste os grupos.

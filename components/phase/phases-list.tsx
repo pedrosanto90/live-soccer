@@ -23,6 +23,7 @@ import {
 import { reorderPhases } from '@/lib/actions/phases'
 import type { PhaseWithGroups } from '@/lib/queries/phases'
 import type { Team as DrawTeam } from '@/lib/draw'
+import type { Tier } from '@/lib/tiers'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -32,9 +33,10 @@ import { PhaseDialog } from '@/components/phase/phase-dialog'
 interface PhasesListProps {
   tournamentId: string
   phases: PhaseWithGroups[]
-  teams: DrawTeam[]
+  teams: (DrawTeam & { tier: Tier })[]
   isAdmin: boolean
   canManage: boolean
+  multiTier?: boolean
 }
 
 export function PhasesList({
@@ -43,6 +45,7 @@ export function PhasesList({
   teams,
   isAdmin,
   canManage,
+  multiTier = false,
 }: PhasesListProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
@@ -126,6 +129,7 @@ export function PhasesList({
                   tournamentId={tournamentId}
                   isAdmin={isAdmin}
                   teams={teams}
+                  multiTier={multiTier}
                 />
               ))}
             </div>

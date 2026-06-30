@@ -33,7 +33,9 @@ import {
   type TournamentInput,
 } from '@/lib/validations/tournament'
 import { createTournament, updateTournament } from '@/lib/actions/tournaments'
+import { TIERS, TIER_LABELS } from '@/lib/tiers'
 import { cn } from '@/lib/utils'
+import { TierDatePicker } from '@/components/tournament/tier-date-picker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -107,6 +109,8 @@ const baseDefaults: TournamentInput = {
   },
   tiebreak_order: [...tiebreakCriterions],
   daily_schedule: [],
+  multi_tier: false,
+  tier_schedule: {},
 }
 
 type DayEntry = TournamentInput['daily_schedule'][number]
@@ -299,6 +303,8 @@ export function TournamentForm({
 
   const tiebreakOrder = form.watch('tiebreak_order')
   const schedule = form.watch('daily_schedule') ?? []
+  const multiTier = form.watch('multi_tier') ?? false
+  const tierSchedule = form.watch('tier_schedule') ?? {}
 
   // Valida os campos essenciais e abre o modal de horários, reconstruindo a
   // grelha de dias a partir das datas e preservando horas já introduzidas.
@@ -505,6 +511,63 @@ export function TournamentForm({
                   )}
                 />
               </div>
+
+              {/* Multi-escalão */}
+              <FormField
+                control={form.control}
+                name="multi_tier"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4 rounded-md border border-border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Torneio multi-escalão</FormLabel>
+                      <FormDescription>
+                        Permite equipas de diferentes escalões com dias de jogo
+                        separados.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value ?? false}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {multiTier ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">
+                      Dias de jogo por escalão
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Define em que dias cada escalão joga. Podes deixar em
+                      branco se ainda não sabes.
+                    </p>
+                  </div>
+                  {TIERS.map((tier) => (
+                    <div
+                      key={tier}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3"
+                    >
+                      <span className="w-24 flex-shrink-0 pt-1.5 text-sm">
+                        {TIER_LABELS[tier]}
+                      </span>
+                      <TierDatePicker
+                        value={tierSchedule[tier] ?? []}
+                        onChange={(dates) =>
+                          form.setValue(
+                            'tier_schedule',
+                            { ...tierSchedule, [tier]: dates },
+                            { shouldDirty: true }
+                          )
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </TabsContent>
 
             {/* Tab 2 — Configurações do jogo */}

@@ -70,15 +70,20 @@ export async function createTeam(
     return { success: false, error: NO_ACCESS }
   }
 
-  // Nome único dentro do torneio (constraint unique (tournament_id, name)).
+  // Nome único por escalão dentro do torneio
+  // (constraint unique (tournament_id, name, tier)).
   const { data: existing } = await supabase
     .from('teams')
     .select('id')
     .eq('tournament_id', tournamentId)
     .eq('name', parsed.data.name)
+    .eq('tier', parsed.data.tier)
     .maybeSingle()
   if (existing) {
-    return { success: false, error: 'Já existe uma equipa com esse nome.' }
+    return {
+      success: false,
+      error: 'Já existe uma equipa com este nome neste escalão.',
+    }
   }
 
   const { data, error } = await supabase
@@ -86,6 +91,7 @@ export async function createTeam(
     .insert({
       tournament_id: tournamentId,
       name: parsed.data.name,
+      tier: parsed.data.tier,
       short_name: parsed.data.short_name || null,
       color_primary: parsed.data.color_primary,
       color_secondary: parsed.data.color_secondary,
@@ -119,30 +125,55 @@ export async function updateTeam(
   } = await supabase.auth.getUser()
   if (!user) return { success: false, error: NOT_AUTH }
 
-  const tournamentId = await tournamentIdOfTeam(supabase, teamId)
-  if (!tournamentId) return { success: false, error: 'Equipa não encontrada.' }
+  const { data: current } = await supabase
+    .from('teams')
+    .select('tournament_id, tier')
+    .eq('id', teamId)
+    .maybeSingle()
+  if (!current) return { success: false, error: 'Equipa não encontrada.' }
+  const tournamentId = current.tournament_id
 
   const role = await memberRole(supabase, tournamentId, user.id)
   if (role !== 'admin' && role !== 'operator') {
     return { success: false, error: NO_ACCESS }
   }
 
-  // Outra equipa com o mesmo nome no torneio?
+  // O escalão só pode mudar enquanto a equipa não estiver em nenhum grupo —
+  // mudar de escalão depois do sorteio quebraria a separação por escalão.
+  if (parsed.data.tier !== current.tier) {
+    const { count } = await supabase
+      .from('group_teams')
+      .select('team_id', { count: 'exact', head: true })
+      .eq('team_id', teamId)
+    if ((count ?? 0) > 0) {
+      return {
+        success: false,
+        error: 'Não é possível mudar o escalão de uma equipa que já está num grupo.',
+      }
+    }
+  }
+
+  // Outra equipa com o mesmo nome neste escalão?
   const { data: clash } = await supabase
     .from('teams')
     .select('id')
     .eq('tournament_id', tournamentId)
     .eq('name', parsed.data.name)
+    .eq('tier', parsed.data.tier)
     .neq('id', teamId)
     .maybeSingle()
   if (clash) {
-    return { success: false, error: 'Já existe uma equipa com esse nome.' }
+    return {
+      success: false,
+      error: 'Já existe uma equipa com este nome neste escalão.',
+    }
   }
 
   const { data, error } = await supabase
     .from('teams')
     .update({
       name: parsed.data.name,
+      tier: parsed.data.tier,
       short_name: parsed.data.short_name || null,
       color_primary: parsed.data.color_primary,
       color_secondary: parsed.data.color_secondary,

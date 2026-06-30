@@ -9,6 +9,8 @@ import {
   type MatchWithRelations,
 } from '@/lib/queries/matches'
 import { getPhasesByTournament } from '@/lib/queries/phases'
+import { getTeamsByTournament } from '@/lib/queries/teams'
+import { getUniqueTiers, TIERS, type Tier } from '@/lib/tiers'
 import type { MatchStatus } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
@@ -36,14 +38,19 @@ export default async function MatchesPage({
   searchParams,
 }: {
   params: Promise<{ tournamentId: string }>
-  searchParams: Promise<{ phase?: string; status?: string }>
+  searchParams: Promise<{ phase?: string; status?: string; tier?: string }>
 }) {
   const { tournamentId } = await params
-  const { phase, status } = await searchParams
+  const { phase, status, tier } = await searchParams
 
   const statusFilter =
     status && VALID_STATUS.includes(status as MatchStatus)
       ? (status as MatchStatus)
+      : undefined
+
+  const tierFilter =
+    tier && (TIERS as readonly string[]).includes(tier)
+      ? (tier as Tier)
       : undefined
 
   const supabase = await createClient()
@@ -62,15 +69,25 @@ export default async function MatchesPage({
     isAdmin = membership?.role === 'admin' || membership?.role === 'operator'
   }
 
-  const [matches, phases, referees] = await Promise.all([
+  const [matches, phases, referees, teams, tournamentRow] = await Promise.all([
     getMatchesByTournament(tournamentId, {
       phase_id: phase,
       status: statusFilter,
+      tier: tierFilter,
       includeBracket: true,
     }),
     getPhasesByTournament(tournamentId),
     getRefereesByTournament(tournamentId),
+    getTeamsByTournament(tournamentId),
+    supabase
+      .from('tournaments')
+      .select('multi_tier')
+      .eq('id', tournamentId)
+      .maybeSingle(),
   ])
+
+  const multiTier = tournamentRow.data?.multi_tier ?? false
+  const availableTiers = getUniqueTiers(teams)
 
   // Agrupa por fase (na ordem) e, dentro das fases de grupos, por grupo.
   const sections: { label: string; matches: MatchWithRelations[] }[] = []
@@ -107,7 +124,9 @@ export default async function MatchesPage({
 
       <MatchFilters
         phases={phases.map((p) => ({ id: p.id, name: p.name }))}
-        currentFilters={{ phase_id: phase, status: statusFilter }}
+        currentFilters={{ phase_id: phase, status: statusFilter, tier: tierFilter }}
+        isMultiTier={multiTier}
+        availableTiers={availableTiers}
       />
 
       {matches.length === 0 ? (

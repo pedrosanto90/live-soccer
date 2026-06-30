@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getEffectiveSettings } from '@/lib/utils'
+import type { Tier } from '@/lib/tiers'
 import type {
   Match,
   MatchEvent,
@@ -20,6 +21,7 @@ export interface MatchTeamLite {
   short_name: string | null
   color_primary: string
   color_secondary: string
+  tier: Tier
 }
 
 export interface MatchPhaseLite {
@@ -58,6 +60,9 @@ export interface MatchFilters {
   phase_id?: string
   group_id?: string
   status?: MatchStatus | MatchStatus[]
+  // Filtra por escalão (via escalão das equipas). Como ambas as equipas de um
+  // jogo são sempre do mesmo escalão, basta filtrar pela equipa da casa.
+  tier?: Tier
   // Por defeito os jogos de bracket são excluídos da lista plana (vivem na vista
   // de eliminatórias). A área de admin liga-o para os poder gerir/agendar.
   includeBracket?: boolean
@@ -67,8 +72,8 @@ export interface MatchFilters {
 // desambiguados pelo nome da constraint (`matches_<coluna>_fkey`).
 const MATCH_SELECT = `
   *,
-  home_team:teams!matches_home_team_id_fkey(id, name, short_name, color_primary, color_secondary),
-  away_team:teams!matches_away_team_id_fkey(id, name, short_name, color_primary, color_secondary),
+  home_team:teams!matches_home_team_id_fkey(id, name, short_name, color_primary, color_secondary, tier),
+  away_team:teams!matches_away_team_id_fkey(id, name, short_name, color_primary, color_secondary, tier),
   phase:tournament_phases(id, name, type),
   group:groups(id, name),
   referee:referees(id, name)
@@ -86,10 +91,25 @@ export async function getMatchesByTournament(
 ): Promise<MatchWithRelations[]> {
   const supabase = await createClient()
 
+  // Filtro por escalão: resolve as equipas do escalão e filtra os jogos pela
+  // equipa da casa (ambas as equipas de um jogo são sempre do mesmo escalão).
+  let tierTeamIds: string[] | null = null
+  if (filters?.tier) {
+    const { data: tierTeams } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('tournament_id', tournamentId)
+      .eq('tier', filters.tier)
+    tierTeamIds = (tierTeams ?? []).map((t) => t.id)
+    if (tierTeamIds.length === 0) return []
+  }
+
   let query = supabase
     .from('matches')
     .select(MATCH_SELECT)
     .eq('tournament_id', tournamentId)
+
+  if (tierTeamIds) query = query.in('home_team_id', tierTeamIds)
 
   // Por defeito os jogos de bracket vivem na vista de eliminatórias, não na lista
   // plana — e podem ter equipas a null ("A definir"). A área de admin pede-os

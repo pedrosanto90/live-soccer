@@ -18,6 +18,7 @@ import {
 import { deletePhase } from '@/lib/actions/phases'
 import type { PhaseWithGroups } from '@/lib/queries/phases'
 import type { Team as DrawTeam } from '@/lib/draw'
+import type { Tier } from '@/lib/tiers'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,7 +47,8 @@ interface PhaseCardProps {
   phase: PhaseWithGroups
   tournamentId: string
   isAdmin: boolean
-  teams: DrawTeam[]
+  teams: (DrawTeam & { tier: Tier })[]
+  multiTier?: boolean
 }
 
 // Etiqueta de estado da fase, derivada dos grupos e dos jogos.
@@ -63,7 +65,13 @@ function phaseStatus(phase: PhaseWithGroups): { label: string; className: string
   return { label: 'Em curso', className: 'bg-indigo-50 text-indigo-600' }
 }
 
-export function PhaseCard({ phase, tournamentId, isAdmin, teams }: PhaseCardProps) {
+export function PhaseCard({
+  phase,
+  tournamentId,
+  isAdmin,
+  teams,
+  multiTier = false,
+}: PhaseCardProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [expanded, setExpanded] = useState(false)
@@ -201,6 +209,7 @@ export function PhaseCard({ phase, tournamentId, isAdmin, teams }: PhaseCardProp
               phaseId={phase.id}
               tournamentId={tournamentId}
               teams={teams}
+              multiTier={multiTier}
             />
           ) : (
             <p className="border-t border-border p-4 text-sm text-muted-foreground">

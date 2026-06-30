@@ -23,6 +23,12 @@ import {
 } from '@/lib/draw'
 import { runDraw } from '@/lib/actions/phases'
 import type { DrawConfigInput } from '@/lib/validations/phase'
+import {
+  TIER_LABELS,
+  TIER_ORDER,
+  getUniqueTiers,
+  type Tier,
+} from '@/lib/tiers'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,15 +41,32 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+type TierTeam = DrawTeam & { tier: Tier }
+
 interface DrawPanelProps {
   phaseId: string
   tournamentId: string
-  teams: DrawTeam[]
+  teams: TierTeam[]
+  // Torneio multi-escalão: o sorteio é configurado e executado por escalão.
+  multiTier?: boolean
 }
 
 type Mode = 'random' | 'seeded'
 
-export function DrawPanel({ phaseId, teams }: DrawPanelProps) {
+export function DrawPanel(props: DrawPanelProps) {
+  if (props.multiTier) {
+    return <MultiTierDrawPanel phaseId={props.phaseId} teams={props.teams} />
+  }
+  return <SingleDrawPanel phaseId={props.phaseId} teams={props.teams} />
+}
+
+function SingleDrawPanel({
+  phaseId,
+  teams,
+}: {
+  phaseId: string
+  teams: DrawTeam[]
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -293,6 +316,169 @@ export function DrawPanel({ phaseId, teams }: DrawPanelProps) {
       ) : null}
 
       {/* Footer */}
+      <Button
+        type="button"
+        className="w-full"
+        disabled={!canRun || isPending}
+        onClick={handleRunDraw}
+        data-testid="draw-run"
+      >
+        {isPending && <Loader2 className="size-4 animate-spin" />}
+        {isPending ? 'A sortear...' : 'Executar sorteio'}
+      </Button>
+    </div>
+  )
+}
+
+// Configuração de um escalão no sorteio multi-escalão.
+interface TierConfig {
+  num_groups: number
+  teams_per_group: number
+}
+
+// Painel de sorteio para torneios multi-escalão. Cada escalão com equipas tem a
+// sua própria configuração (nº de grupos × equipas por grupo). O sorteio é
+// sempre aleatório e executa todos os escalões de uma vez. As equipas de
+// escalões diferentes nunca se misturam.
+function MultiTierDrawPanel({
+  phaseId,
+  teams,
+}: {
+  phaseId: string
+  teams: TierTeam[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  // Escalões presentes nas equipas inscritas, por ordem de TIER_ORDER.
+  const tiers = useMemo(() => getUniqueTiers(teams), [teams])
+
+  const [configs, setConfigs] = useState<Record<string, TierConfig>>(() =>
+    Object.fromEntries(
+      tiers.map((t) => [t, { num_groups: 2, teams_per_group: 3 }])
+    )
+  )
+
+  const teamsByTier = useMemo(() => {
+    const map = new Map<Tier, TierTeam[]>()
+    for (const team of teams) {
+      if (!map.has(team.tier)) map.set(team.tier, [])
+      map.get(team.tier)!.push(team)
+    }
+    return map
+  }, [teams])
+
+  function cfgOf(tier: Tier): TierConfig {
+    return configs[tier] ?? { num_groups: 2, teams_per_group: 3 }
+  }
+
+  function setCfg(tier: Tier, patch: Partial<TierConfig>) {
+    setConfigs((prev) => ({
+      ...prev,
+      [tier]: { ...cfgOf(tier), ...patch },
+    }))
+  }
+
+  // Estado de validação por escalão.
+  const validations = tiers.map((tier) => {
+    const count = teamsByTier.get(tier)?.length ?? 0
+    const cfg = cfgOf(tier)
+    return {
+      tier,
+      count,
+      required: cfg.num_groups * cfg.teams_per_group,
+      result: validateDrawRequirements(count, cfg.num_groups, cfg.teams_per_group),
+    }
+  })
+
+  const canRun = tiers.length > 0 && validations.every((v) => v.result.valid)
+
+  function handleRunDraw() {
+    if (!canRun) return
+    const config: DrawConfigInput = {
+      tiers: tiers
+        .slice()
+        .sort((a, b) => TIER_ORDER[a] - TIER_ORDER[b])
+        .map((tier) => ({
+          tier,
+          mode: 'random' as const,
+          num_groups: cfgOf(tier).num_groups,
+          teams_per_group: cfgOf(tier).teams_per_group,
+        })),
+    }
+
+    startTransition(async () => {
+      const result = await runDraw(phaseId, config)
+      if (result.success) {
+        toast.success(
+          `Sorteio efectuado — ${result.data.matches_created} jogo(s) gerado(s).`
+        )
+        router.refresh()
+      } else {
+        toast.error(result.error)
+      }
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-4 border-t border-border p-4">
+      <Section title="Configuração do sorteio por escalão">
+        <div className="flex flex-col gap-4">
+          {tiers.map((tier) => {
+            const v = validations.find((x) => x.tier === tier)!
+            const cfg = cfgOf(tier)
+            return (
+              <div
+                key={tier}
+                className="flex flex-col gap-3 rounded-md border border-border bg-surface-2 p-3"
+              >
+                <p className="text-sm font-medium">
+                  {TIER_LABELS[tier]}{' '}
+                  <span className="text-muted-foreground">
+                    — {v.count} equipa(s)
+                  </span>
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumberField
+                    label="Nº de grupos"
+                    value={cfg.num_groups}
+                    min={1}
+                    max={16}
+                    testid={`draw-num-groups-${tier}`}
+                    onChange={(n) => setCfg(tier, { num_groups: n })}
+                  />
+                  <NumberField
+                    label="Equipas por grupo"
+                    value={cfg.teams_per_group}
+                    min={2}
+                    max={8}
+                    testid={`draw-teams-per-group-${tier}`}
+                    onChange={(n) => setCfg(tier, { teams_per_group: n })}
+                  />
+                </div>
+                {v.result.valid ? (
+                  <p className="flex items-center gap-1.5 text-xs text-success">
+                    <CheckCircle className="size-3.5" />
+                    Pronto — {v.required} equipas em {cfg.num_groups} grupo(s).
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1.5 text-xs text-danger">
+                    <AlertCircle className="size-3.5" />
+                    {v.result.error} (necessárias {v.required}, disponíveis{' '}
+                    {v.count})
+                  </p>
+                )}
+              </div>
+            )
+          })}
+          {tiers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Ainda não há equipas inscritas para sortear.
+            </p>
+          ) : null}
+        </div>
+      </Section>
+
       <Button
         type="button"
         className="w-full"

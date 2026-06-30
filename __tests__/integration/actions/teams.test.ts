@@ -50,7 +50,7 @@ describe('createTeam action', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejeita quando já existe uma equipa com o mesmo nome', async () => {
+  it('rejeita quando já existe uma equipa com o mesmo nome no escalão', async () => {
     // 1ª maybeSingle → membership admin; 2ª maybeSingle → equipa existente.
     vi.mocked(createClient).mockResolvedValueOnce(
       makeSupabaseMock({
@@ -64,7 +64,7 @@ describe('createTeam action', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Já existe uma equipa com esse nome.',
+      error: 'Já existe uma equipa com este nome neste escalão.',
     })
   })
 

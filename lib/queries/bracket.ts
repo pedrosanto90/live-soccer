@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { computeWinner, type QualifiedTeam } from '@/lib/bracket'
 import { sortStandings } from '@/lib/standings'
 import { getStandingsByTournament } from '@/lib/queries/standings'
+import type { Tier } from '@/lib/tiers'
 import type { MatchStatus, TournamentSettings } from '@/types/database'
 
 // Quantos classificados de cada grupo se apuram para as eliminatórias. O
@@ -19,6 +20,7 @@ export interface BracketTeamLite {
   short_name: string | null
   color_primary: string
   color_secondary: string
+  tier: Tier
 }
 
 export interface BracketMatchRow {
@@ -35,7 +37,7 @@ export interface BracketMatchRow {
   winner_team_id: string | null
 }
 
-const TEAM_SELECT = 'id, name, short_name, color_primary, color_secondary'
+const TEAM_SELECT = 'id, name, short_name, color_primary, color_secondary, tier'
 
 // Forma crua devolvida pelo Supabase para a query do bracket.
 interface RawBracketMatch {
@@ -113,7 +115,20 @@ export interface BracketSection {
 export interface KnockoutPhaseBracket {
   id: string
   name: string
+  // Escalão da fase, inferido a partir das equipas dos jogos (todas do mesmo
+  // escalão). `null` quando ainda não há equipas atribuídas.
+  tier: Tier | null
   matches: BracketMatchRow[]
+}
+
+// Infere o escalão de um conjunto de jogos de bracket a partir da primeira
+// equipa atribuída.
+function inferBracketTier(matches: BracketMatchRow[]): Tier | null {
+  for (const m of matches) {
+    const tier = m.home_team?.tier ?? m.away_team?.tier
+    if (tier) return tier
+  }
+  return null
 }
 
 // Fases de eliminatórias de um torneio que já têm bracket gerado, com os
@@ -133,11 +148,15 @@ export async function getKnockoutBrackets(
   if (!phases || phases.length === 0) return []
 
   const brackets = await Promise.all(
-    (phases as { id: string; name: string }[]).map(async (p) => ({
-      id: p.id,
-      name: p.name,
-      matches: await getBracketByPhase(p.id),
-    }))
+    (phases as { id: string; name: string }[]).map(async (p) => {
+      const matches = await getBracketByPhase(p.id)
+      return {
+        id: p.id,
+        name: p.name,
+        tier: inferBracketTier(matches),
+        matches,
+      }
+    })
   )
 
   return brackets.filter((b) => b.matches.length > 0)

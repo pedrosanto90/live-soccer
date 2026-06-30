@@ -43,6 +43,7 @@ export type TiebreakerCriterion =
   | 'red_cards'
   | 'draw'
 export type UserRole = 'admin' | 'operator' | 'viewer'
+export type TeamTier = 'seniors' | 'veterans' | 'female' | 'benjamins'
 
 // ---------------------------------------------------------------------------
 // Settings (stored as JSON in tournaments.settings / matches.settings_override)
@@ -72,6 +73,10 @@ export interface TournamentSettings {
   // A hora de fim é prevista (base para agendar jogos) e pode ser nula.
   daily_schedule: { date: string; start: string; end: string | null }[]
 }
+
+// Dias de jogo por escalão. Chave = escalão, valor = datas ISO (YYYY-MM-DD).
+// Só os escalões presentes no torneio precisam de estar definidos.
+export type TierSchedule = Partial<Record<TeamTier, string[]>>
 
 // ---------------------------------------------------------------------------
 // Database
@@ -125,6 +130,8 @@ export interface Database {
           starts_at: string | null
           ends_at: string | null
           settings: TournamentSettings
+          multi_tier: boolean
+          tier_schedule: TierSchedule
           created_at: string
           updated_at: string
         }
@@ -140,6 +147,8 @@ export interface Database {
           starts_at?: string | null
           ends_at?: string | null
           settings: TournamentSettings
+          multi_tier?: boolean
+          tier_schedule?: TierSchedule
           created_at?: string
           updated_at?: string
         }
@@ -155,6 +164,8 @@ export interface Database {
           starts_at?: string | null
           ends_at?: string | null
           settings?: TournamentSettings
+          multi_tier?: boolean
+          tier_schedule?: TierSchedule
           created_at?: string
           updated_at?: string
         }
@@ -190,6 +201,7 @@ export interface Database {
           color_primary: string
           color_secondary: string
           logo_url: string | null
+          tier: TeamTier
           created_at: string
           updated_at: string
         }
@@ -201,6 +213,7 @@ export interface Database {
           color_primary: string
           color_secondary: string
           logo_url?: string | null
+          tier?: TeamTier
           created_at?: string
           updated_at?: string
         }
@@ -212,6 +225,7 @@ export interface Database {
           color_primary?: string
           color_secondary?: string
           logo_url?: string | null
+          tier?: TeamTier
           created_at?: string
           updated_at?: string
         }
@@ -638,6 +652,7 @@ export interface Database {
       player_position: PlayerPosition
       tiebreaker_criterion: TiebreakerCriterion
       user_role: UserRole
+      team_tier: TeamTier
     }
     CompositeTypes: Record<never, never>
   }

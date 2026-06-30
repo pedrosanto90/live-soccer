@@ -30,6 +30,32 @@ describe('teamSchema', () => {
     expect(teamSchema.safeParse({ name: 'S' }).success).toBe(false)
   })
 
+  it('valida equipa com escalão', () => {
+    expect(
+      teamSchema.safeParse({
+        name: 'Sporting CP',
+        tier: 'seniors',
+      }).success
+    ).toBe(true)
+  })
+
+  it('aplica o default do escalão quando omitido', () => {
+    const result = teamSchema.safeParse({ name: 'Sporting CP' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.tier).toBe('seniors')
+    }
+  })
+
+  it('rejeita escalão inválido', () => {
+    expect(
+      teamSchema.safeParse({
+        name: 'Sporting CP',
+        tier: 'sub17',
+      }).success
+    ).toBe(false)
+  })
+
   it('rejeita abreviatura com mais de 5 caracteres', () => {
     expect(
       teamSchema.safeParse({

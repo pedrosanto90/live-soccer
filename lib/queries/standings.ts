@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { StandingRow } from '@/lib/standings'
+import { TIER_LABELS, TIER_ORDER, type Tier } from '@/lib/tiers'
 import type { PhaseType } from '@/types/database'
 
 // ---------------------------------------------------------------------------
@@ -29,8 +30,17 @@ export interface PhaseStandings {
   groups: GroupStandings[]
 }
 
+// Classificação agrupada por escalão, para os ecrãs públicos/admin que separam
+// os escalões verticalmente.
+export interface TierStandings {
+  tier: Tier
+  tierLabel: string
+  phases: PhaseStandings[]
+}
+
 // Embed das colunas da equipa necessárias para o display.
-const TEAM_SELECT = 'id, name, short_name, color_primary, color_secondary, logo_url'
+const TEAM_SELECT =
+  'id, name, short_name, color_primary, color_secondary, logo_url, tier'
 
 // Forma crua devolvida pelo Supabase para a query aninhada.
 interface RawStanding extends Omit<StandingRow, 'team'> {
@@ -98,6 +108,40 @@ export async function getStandingsByTournament(
           .map((s) => ({ ...s, team: s.team })),
       })),
   }))
+}
+
+// Reagrupa a classificação por escalão. O escalão de cada grupo é inferido a
+// partir das equipas (todas as equipas de um grupo são do mesmo escalão).
+// Grupos sem classificações (sem equipas) são ignorados. Devolve os escalões
+// presentes por ordem de TIER_ORDER, cada um com as suas fases/grupos.
+export function groupStandingsByTier(
+  phases: PhaseStandings[]
+): TierStandings[] {
+  const byTier = new Map<Tier, PhaseStandings[]>()
+
+  for (const phase of phases) {
+    // Agrupa os grupos desta fase pelo escalão das respectivas equipas.
+    const groupsByTier = new Map<Tier, GroupStandings[]>()
+    for (const group of phase.groups) {
+      const tier = group.standings[0]?.team.tier as Tier | undefined
+      if (!tier) continue
+      if (!groupsByTier.has(tier)) groupsByTier.set(tier, [])
+      groupsByTier.get(tier)!.push(group)
+    }
+
+    for (const [tier, groups] of groupsByTier) {
+      if (!byTier.has(tier)) byTier.set(tier, [])
+      byTier.get(tier)!.push({ phase: phase.phase, groups })
+    }
+  }
+
+  return [...byTier.keys()]
+    .sort((a, b) => TIER_ORDER[a] - TIER_ORDER[b])
+    .map((tier) => ({
+      tier,
+      tierLabel: TIER_LABELS[tier],
+      phases: byTier.get(tier)!,
+    }))
 }
 
 // Standings de um grupo específico, com os dados da equipa. Ordenação base por

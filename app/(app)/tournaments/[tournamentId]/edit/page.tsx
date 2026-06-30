@@ -49,6 +49,8 @@ export default async function EditTournamentPage({
     visibility: tournament.visibility,
     starts_at: tournament.starts_at ? tournament.starts_at.slice(0, 10) : '',
     ends_at: tournament.ends_at ? tournament.ends_at.slice(0, 10) : '',
+    multi_tier: tournament.multi_tier,
+    tier_schedule: tournament.tier_schedule ?? {},
     ...settings,
   }
 

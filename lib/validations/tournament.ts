@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { TIERS } from '@/lib/tiers'
+
 // Schema de validação de torneios, partilhado entre a Server Action e o
 // formulário client-side (react-hook-form).
 
@@ -75,6 +77,13 @@ export const tournamentSchema = z.object({
   cards: cardsSchema,
   tiebreak_order: z.array(z.enum(tiebreakCriterions)).min(1),
   daily_schedule: z.array(dailyScheduleEntrySchema).default([]),
+  // Torneio multi-escalão: escalões separados com dias de jogo próprios.
+  multi_tier: z.boolean().default(false),
+  // Dias de jogo por escalão (datas ISO YYYY-MM-DD). Escalões sem dias podem
+  // ficar omitidos.
+  tier_schedule: z
+    .partialRecord(z.enum(TIERS), z.array(z.string()))
+    .default({}),
 })
 
 export type TournamentInput = z.infer<typeof tournamentSchema>

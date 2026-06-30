@@ -7,6 +7,8 @@ import { MoreHorizontal, Pencil, Eye, Trash2 } from 'lucide-react'
 
 import { deleteTeam } from '@/lib/actions/teams'
 import type { TeamWithCount } from '@/lib/queries/teams'
+import { TIER_LABELS } from '@/lib/tiers'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -30,9 +32,16 @@ interface TeamCardProps {
   team: TeamWithCount
   tournamentId: string
   isAdmin: boolean
+  // Em torneios multi-escalão mostra o escalão da equipa como badge.
+  multiTier?: boolean
 }
 
-export function TeamCard({ team, tournamentId, isAdmin }: TeamCardProps) {
+export function TeamCard({
+  team,
+  tournamentId,
+  isAdmin,
+  multiTier = false,
+}: TeamCardProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -83,9 +92,16 @@ export function TeamCard({ team, tournamentId, isAdmin }: TeamCardProps) {
 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{team.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {team.player_count} jogador(es)
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">
+              {team.player_count} jogador(es)
+            </p>
+            {multiTier ? (
+              <Badge variant="secondary" className="text-[10px]">
+                {TIER_LABELS[team.tier]}
+              </Badge>
+            ) : null}
+          </div>
         </div>
 
         {isAdmin ? (

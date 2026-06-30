@@ -53,7 +53,7 @@ export async function getTeamById(
   const { data } = await supabase
     .from('teams')
     .select(
-      'id, tournament_id, name, short_name, color_primary, color_secondary, logo_url, created_at, updated_at, players(id, name, number, position, is_active)'
+      'id, tournament_id, name, short_name, color_primary, color_secondary, logo_url, tier, created_at, updated_at, players(id, name, number, position, is_active)'
     )
     .eq('id', teamId)
     .order('number', { referencedTable: 'players', ascending: true, nullsFirst: false })

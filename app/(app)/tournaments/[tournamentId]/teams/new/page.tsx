@@ -34,10 +34,19 @@ export default async function NewTeamPage({
     redirect(`/tournaments/${tournamentId}/teams`)
   }
 
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('multi_tier')
+    .eq('id', tournamentId)
+    .maybeSingle()
+
   return (
     <div className="max-w-lg space-y-8">
       <PageHeader title="Adicionar equipa" />
-      <TeamForm tournamentId={tournamentId} />
+      <TeamForm
+        tournamentId={tournamentId}
+        multiTier={tournament?.multi_tier ?? false}
+      />
     </div>
   )
 }

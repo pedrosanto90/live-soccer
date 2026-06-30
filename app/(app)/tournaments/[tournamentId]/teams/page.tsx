@@ -37,6 +37,12 @@ export default async function TeamsPage({
   }
 
   const teams = await getTeamsByTournament(tournamentId)
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('multi_tier')
+    .eq('id', tournamentId)
+    .maybeSingle()
+  const multiTier = tournament?.multi_tier ?? false
 
   return (
     <div className="space-y-8">
@@ -77,6 +83,7 @@ export default async function TeamsPage({
               team={team}
               tournamentId={tournamentId}
               isAdmin={isAdmin}
+              multiTier={multiTier}
             />
           ))}
         </div>

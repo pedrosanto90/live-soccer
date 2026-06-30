@@ -35,6 +35,7 @@ export default async function StandingsPage({
         phases={phases}
         tiebreakOrder={tournament.settings.tiebreak_order}
         qualifyingSpots={QUALIFYING_SPOTS}
+        multiTier={tournament.multi_tier}
       />
     </div>
   )

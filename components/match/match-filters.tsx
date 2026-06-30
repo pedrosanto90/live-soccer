@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { TIER_LABELS, type Tier } from '@/lib/tiers'
 import type { MatchStatus } from '@/types/database'
 
 interface PhaseOption {
@@ -21,18 +22,28 @@ interface PhaseOption {
 
 interface MatchFiltersProps {
   phases: PhaseOption[]
-  currentFilters: { phase_id?: string; status?: MatchStatus }
+  currentFilters: { phase_id?: string; status?: MatchStatus; tier?: Tier }
+  // Só os torneios multi-escalão mostram o filtro de escalão.
+  isMultiTier?: boolean
+  availableTiers?: Tier[]
 }
 
 const ALL = 'all'
 const STATUS_OPTIONS: MatchStatus[] = ['scheduled', 'in_progress', 'finished']
 
-export function MatchFilters({ phases, currentFilters }: MatchFiltersProps) {
+export function MatchFilters({
+  phases,
+  currentFilters,
+  isMultiTier = false,
+  availableTiers = [],
+}: MatchFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const hasFilters = Boolean(currentFilters.phase_id || currentFilters.status)
+  const hasFilters = Boolean(
+    currentFilters.phase_id || currentFilters.status || currentFilters.tier
+  )
 
   function setParam(key: string, value: string | null) {
     const params = new URLSearchParams(searchParams.toString())
@@ -69,6 +80,25 @@ export function MatchFilters({ phases, currentFilters }: MatchFiltersProps) {
           ))}
         </SelectContent>
       </Select>
+
+      {isMultiTier && availableTiers.length > 0 ? (
+        <Select
+          value={currentFilters.tier ?? ALL}
+          onValueChange={(v) => setParam('tier', v === ALL ? null : v)}
+        >
+          <SelectTrigger className="w-48" data-testid="filter-tier">
+            <SelectValue placeholder="Todos os escalões" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todos os escalões</SelectItem>
+            {availableTiers.map((tier) => (
+              <SelectItem key={tier} value={tier}>
+                {TIER_LABELS[tier]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
 
       {STATUS_OPTIONS.map((status) => (
         <Button
