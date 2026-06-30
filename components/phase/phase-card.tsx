@@ -218,6 +218,8 @@ export function PhaseCard({
                 groups={phase.groups}
                 matchesCount={phase.matches_count}
                 canReset={isAdmin && phase.can_reset}
+                teams={teams}
+                multiTier={multiTier}
               />
               {isAdmin && hasPendingTiers ? (
                 <DrawPanel
