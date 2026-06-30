@@ -84,6 +84,9 @@ export const tournamentSchema = z.object({
   tier_schedule: z
     .partialRecord(z.enum(TIERS), z.array(z.string()))
     .default({}),
+  // Ordem das finais por escalão. As finais de todos os escalões são agendadas
+  // no fim do torneio, por esta ordem.
+  finals_order: z.array(z.enum(TIERS)).default([]),
 })
 
 export type TournamentInput = z.infer<typeof tournamentSchema>

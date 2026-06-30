@@ -33,7 +33,7 @@ import {
   type TournamentInput,
 } from '@/lib/validations/tournament'
 import { createTournament, updateTournament } from '@/lib/actions/tournaments'
-import { TIERS, TIER_LABELS } from '@/lib/tiers'
+import { TIERS, TIER_LABELS, type Tier } from '@/lib/tiers'
 import { cn } from '@/lib/utils'
 import { TierDatePicker } from '@/components/tournament/tier-date-picker'
 import { Button } from '@/components/ui/button'
@@ -111,6 +111,7 @@ const baseDefaults: TournamentInput = {
   daily_schedule: [],
   multi_tier: false,
   tier_schedule: {},
+  finals_order: [...TIERS],
 }
 
 type DayEntry = TournamentInput['daily_schedule'][number]
@@ -281,6 +282,53 @@ function SortableCriterion({ id }: { id: string }) {
   )
 }
 
+// Item arrastável da lista de ordem das finais (um por escalão).
+function SortableTier({ id }: { id: Tier }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-3 rounded-md border border-border bg-surface-1 px-3 py-2',
+        isDragging && 'opacity-60'
+      )}
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+        aria-label="Reordenar escalão"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-4" />
+      </button>
+      <span className="text-sm">{TIER_LABELS[id]}</span>
+    </div>
+  )
+}
+
+// Lista completa e ordenada de escalões: respeita a ordem guardada e acrescenta
+// no fim (por TIER_ORDER) os escalões em falta, garantindo que todos aparecem.
+function fullFinalsOrder(stored: Tier[]): Tier[] {
+  const seen = stored.filter((t): t is Tier => (TIERS as readonly string[]).includes(t))
+  const missing = TIERS.filter((t) => !seen.includes(t))
+  return [...seen, ...missing]
+}
+
 export function TournamentForm({
   defaultValues,
   tournamentId,
@@ -305,6 +353,7 @@ export function TournamentForm({
   const schedule = form.watch('daily_schedule') ?? []
   const multiTier = form.watch('multi_tier') ?? false
   const tierSchedule = form.watch('tier_schedule') ?? {}
+  const finalsOrder = fullFinalsOrder(form.watch('finals_order') ?? [])
 
   // Valida os campos essenciais e abre o modal de horários, reconstruindo a
   // grelha de dias a partir das datas e preservando horas já introduzidas.
@@ -355,6 +404,18 @@ export function TournamentForm({
     // 'draw' (sorteio) é sempre o último critério.
     next = [...next.filter((c) => c !== 'draw'), 'draw'] as typeof next
     form.setValue('tiebreak_order', next, { shouldDirty: true })
+  }
+
+  function handleFinalsDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = finalsOrder.indexOf(active.id as Tier)
+    const newIndex = finalsOrder.indexOf(over.id as Tier)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const next = arrayMove(finalsOrder, oldIndex, newIndex)
+    form.setValue('finals_order', next, { shouldDirty: true })
   }
 
   function onSubmit(values: FormOutput) {
@@ -566,6 +627,33 @@ export function TournamentForm({
                       />
                     </div>
                   ))}
+
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Ordem das finais</p>
+                      <p className="text-xs text-muted-foreground">
+                        Arrasta para definir a ordem em que as finais de cada
+                        escalão são agendadas. A última da lista é a última final
+                        do torneio.
+                      </p>
+                    </div>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleFinalsDragEnd}
+                    >
+                      <SortableContext
+                        items={finalsOrder}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="flex flex-col gap-2">
+                          {finalsOrder.map((tier) => (
+                            <SortableTier key={tier} id={tier} />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
                 </div>
               ) : null}
             </TabsContent>

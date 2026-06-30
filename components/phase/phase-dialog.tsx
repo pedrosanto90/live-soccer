@@ -15,9 +15,17 @@ import {
 } from '@/lib/validations/phase'
 import { createPhase, updatePhase } from '@/lib/actions/phases'
 import { cn } from '@/lib/utils'
+import { TIERS, TIER_LABELS } from '@/lib/tiers'
 import type { PhaseType, TournamentPhase } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -33,11 +41,13 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 
-type EditablePhase = Pick<TournamentPhase, 'id' | 'name' | 'type'>
+type EditablePhase = Pick<TournamentPhase, 'id' | 'name' | 'type' | 'tier'>
 
 interface PhaseDialogProps {
   tournamentId: string
   phase?: EditablePhase | null
+  // Torneio multi-escalão: revela o seletor de escalão nas eliminatórias.
+  multiTier?: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
@@ -56,12 +66,14 @@ function toDefaults(phase?: EditablePhase | null): PhaseInput {
     name: phase?.name ?? phaseTypeLabels.group,
     type: phase?.type ?? 'group',
     order_index: 0,
+    tier: phase?.tier ?? undefined,
   }
 }
 
 export function PhaseDialog({
   tournamentId,
   phase,
+  multiTier = false,
   open,
   onOpenChange,
   onSuccess,
@@ -164,6 +176,36 @@ export function PhaseDialog({
                 </FormItem>
               )}
             />
+
+            {multiTier && type === 'knockout' ? (
+              <FormField
+                control={form.control}
+                name="tier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Escalão</FormLabel>
+                    <Select
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="phase-tier">
+                          <SelectValue placeholder="Escolhe o escalão" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {TIERS.map((tier) => (
+                          <SelectItem key={tier} value={tier}>
+                            {TIER_LABELS[tier]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             <div className="flex justify-end gap-2 border-t border-border pt-4">
               <Button

@@ -254,7 +254,13 @@ export function PhaseCard({
 
       <PhaseDialog
         tournamentId={tournamentId}
-        phase={{ id: phase.id, name: phase.name, type: phase.type }}
+        multiTier={multiTier}
+        phase={{
+          id: phase.id,
+          name: phase.name,
+          type: phase.type,
+          tier: phase.tier,
+        }}
         open={editOpen}
         onOpenChange={setEditOpen}
       />

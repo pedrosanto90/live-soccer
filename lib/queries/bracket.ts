@@ -167,7 +167,10 @@ export async function getKnockoutBrackets(
 // ordem de grupo e depois de posição — a ordem que `generateBracket` espera.
 export async function getQualifiedTeams(
   tournamentId: string,
-  spots: number = DEFAULT_QUALIFYING_SPOTS
+  spots: number = DEFAULT_QUALIFYING_SPOTS,
+  // Quando definido, só apura equipas deste escalão (eliminatórias por escalão
+  // num torneio multi-escalão). `undefined` → todas as equipas.
+  tier?: Tier
 ): Promise<QualifiedTeam[]> {
   const supabase = await createClient()
 
@@ -189,7 +192,10 @@ export async function getQualifiedTeams(
   const qualified: QualifiedTeam[] = []
   for (const phase of phases) {
     for (const { group, standings } of phase.groups) {
-      const sorted = sortStandings(standings, tiebreak)
+      const scoped = tier
+        ? standings.filter((s) => s.team.tier === tier)
+        : standings
+      const sorted = sortStandings(scoped, tiebreak)
       sorted.slice(0, spots).forEach((row, i) => {
         qualified.push({
           team_id: row.team_id,
@@ -199,6 +205,7 @@ export async function getQualifiedTeams(
           color_secondary: row.team.color_secondary,
           from_group: group.name,
           position: i + 1,
+          tier: row.team.tier,
         })
       })
     }

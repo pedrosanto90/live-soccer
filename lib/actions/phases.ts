@@ -163,6 +163,7 @@ export async function createPhase(
       name: parsed.data.name,
       type: parsed.data.type,
       order_index: count ?? 0,
+      tier: parsed.data.tier ?? null,
     })
     .select('*')
     .single()
@@ -191,10 +192,14 @@ export async function updatePhase(
   const auth = await requireAdminForPhase(supabase, phaseId)
   if ('error' in auth) return { success: false, error: auth.error }
 
-  // O order_index é gerido pelo reorderPhases — aqui só nome e tipo.
+  // O order_index é gerido pelo reorderPhases — aqui nome, tipo e escalão.
   const { data, error } = await supabase
     .from('tournament_phases')
-    .update({ name: parsed.data.name, type: parsed.data.type })
+    .update({
+      name: parsed.data.name,
+      type: parsed.data.type,
+      tier: parsed.data.tier ?? null,
+    })
     .eq('id', phaseId)
     .select('*')
     .single()

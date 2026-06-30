@@ -9,6 +9,10 @@ export const phaseSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(60),
   type: z.enum(['group', 'knockout']),
   order_index: z.number().int().min(0).default(0),
+  // Escalão da fase (torneios multi-escalão). Relevante nas eliminatórias, onde
+  // determina de que escalão saem as equipas apuradas. `undefined` → fase
+  // mono-escalão (todas as equipas).
+  tier: z.enum(TIERS).optional(),
 })
 
 export const groupSchema = z.object({

@@ -78,6 +78,10 @@ export interface TournamentSettings {
 // Só os escalões presentes no torneio precisam de estar definidos.
 export type TierSchedule = Partial<Record<TeamTier, string[]>>
 
+// Ordem das finais por escalão num torneio multi-escalão. As finais de todos os
+// escalões são agendadas no fim do torneio, por esta ordem.
+export type FinalsOrder = TeamTier[]
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
@@ -132,6 +136,7 @@ export interface Database {
           settings: TournamentSettings
           multi_tier: boolean
           tier_schedule: TierSchedule
+          finals_order: FinalsOrder
           created_at: string
           updated_at: string
         }
@@ -149,6 +154,7 @@ export interface Database {
           settings: TournamentSettings
           multi_tier?: boolean
           tier_schedule?: TierSchedule
+          finals_order?: FinalsOrder
           created_at?: string
           updated_at?: string
         }
@@ -166,6 +172,7 @@ export interface Database {
           settings?: TournamentSettings
           multi_tier?: boolean
           tier_schedule?: TierSchedule
+          finals_order?: FinalsOrder
           created_at?: string
           updated_at?: string
         }
@@ -271,6 +278,7 @@ export interface Database {
           name: string
           type: PhaseType
           order_index: number
+          tier: TeamTier | null
           created_at: string
         }
         Insert: {
@@ -279,6 +287,7 @@ export interface Database {
           name: string
           type: PhaseType
           order_index: number
+          tier?: TeamTier | null
           created_at?: string
         }
         Update: {
@@ -287,6 +296,7 @@ export interface Database {
           name?: string
           type?: PhaseType
           order_index?: number
+          tier?: TeamTier | null
           created_at?: string
         }
         Relationships: []

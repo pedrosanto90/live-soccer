@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { Tier } from '@/lib/tiers'
 import type { MatchStatus, PhaseType } from '@/types/database'
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ export interface PhaseWithGroups {
   name: string
   type: PhaseType
   order_index: number
+  tier: Tier | null
   created_at: string
   groups: GroupWithTeams[]
   matches_count: number
@@ -41,6 +43,7 @@ interface RawPhaseRow {
   name: string
   type: PhaseType
   order_index: number
+  tier: Tier | null
   created_at: string
   groups: {
     id: string
@@ -53,7 +56,7 @@ interface RawPhaseRow {
 }
 
 const PHASE_SELECT = `
-  id, tournament_id, name, type, order_index, created_at,
+  id, tournament_id, name, type, order_index, tier, created_at,
   groups(
     id, phase_id, name, order_index,
     group_teams(teams(id, name, short_name, color_primary, color_secondary))
@@ -80,6 +83,7 @@ function mapPhase(row: RawPhaseRow): PhaseWithGroups {
     name: row.name,
     type: row.type,
     order_index: row.order_index,
+    tier: row.tier,
     created_at: row.created_at,
     groups,
     matches_count: row.matches.length,

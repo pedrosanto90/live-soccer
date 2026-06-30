@@ -63,6 +63,7 @@ export async function createTournament(
       settings: buildTournamentSettings(parsed.data),
       multi_tier: parsed.data.multi_tier,
       tier_schedule: parsed.data.tier_schedule,
+      finals_order: parsed.data.finals_order,
     })
     .select('id')
     .single()
@@ -120,6 +121,7 @@ export async function updateTournament(
       settings: buildTournamentSettings(parsed.data),
       multi_tier: parsed.data.multi_tier,
       tier_schedule: parsed.data.tier_schedule,
+      finals_order: parsed.data.finals_order,
     })
     .eq('id', id)
     .select('*')

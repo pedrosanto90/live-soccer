@@ -8,7 +8,6 @@ import {
   computeWinner,
   THIRD_PLACE_POSITION,
   type BracketSlot,
-  type QualifiedTeam,
 } from '@/lib/bracket'
 import {
   getBracketByPhase,
@@ -20,6 +19,7 @@ import {
   matchDurationMinutes,
   MATCH_GAP_MINUTES,
 } from '@/lib/scheduling'
+import { TIER_ORDER, type Tier } from '@/lib/tiers'
 import type { ActionResult } from '@/types'
 import type {
   TablesInsert,
@@ -94,7 +94,7 @@ export async function generateKnockoutBracket(
 
   const { data: phase } = await supabase
     .from('tournament_phases')
-    .select('id, tournament_id, type')
+    .select('id, tournament_id, type, tier')
     .eq('id', phaseId)
     .maybeSingle()
   if (!phase) return { success: false, error: NOT_FOUND }
@@ -115,7 +115,13 @@ export async function generateKnockoutBracket(
     return { success: false, error: 'O bracket desta fase já foi gerado.' }
   }
 
-  const teams = await getQualifiedTeams(phase.tournament_id)
+  // Eliminatórias por escalão: só apura equipas do escalão da fase. `tier` null
+  // (fase mono-escalão) apura todas as equipas, como antes.
+  const teams = await getQualifiedTeams(
+    phase.tournament_id,
+    undefined,
+    phase.tier ?? undefined
+  )
   if (teams.length < 2) {
     return {
       success: false,
@@ -145,12 +151,10 @@ export async function generateKnockoutBracket(
     .eq('id', phase.tournament_id)
     .maybeSingle()
   const settings = (tournament?.settings ?? null) as Partial<TournamentSettings> | null
-  const { count: scheduledCount } = await supabase
-    .from('matches')
-    .select('id', { count: 'exact', head: true })
-    .eq('tournament_id', phase.tournament_id)
-    .not('scheduled_at', 'is', null)
-  const offset = scheduledCount ?? 0
+  // Offset = nº de jogos já agendados, excluindo as finais. As finais são
+  // agendadas à parte (no fim do torneio, por `finals_order`) por
+  // `rescheduleFinals`, por isso não contam para o offset dos jogos inline.
+  const offset = await countScheduledNonFinals(supabase, phase.tournament_id)
 
   // Jogo de 3.º/4.º lugar: opcional, e só quando existem duas meias-finais
   // reais (ronda 2, sem byes) de onde saem os dois perdedores que o disputam.
@@ -165,15 +169,17 @@ export async function generateKnockoutBracket(
   const thirdPlaceId = wantsThirdPlace ? crypto.randomUUID() : null
   const thirdPlaceKey = key(1, THIRD_PLACE_POSITION)
 
-  // Chaves dos jogos efectivamente jogados, por ordem de agendamento. O jogo de
-  // 3.º lugar é inserido imediatamente antes da final.
+  // Chaves dos jogos efectivamente jogados, por ordem de agendamento. A final
+  // (ronda 1, posição 0) é EXCLUÍDA — fica sem hora aqui e é agendada no fim, por
+  // ordem de escalão, por `rescheduleFinals`. O jogo de 3.º lugar é acrescentado
+  // a seguir aos restantes jogos desta fase.
+  const finalKey = key(1, 0)
   const playableKeys = slots
     .filter((s) => !s.is_bye)
     .map((s) => key(s.round, s.position))
+    .filter((k) => k !== finalKey)
   if (thirdPlaceId) {
-    const finalIdx = playableKeys.indexOf(key(1, 0))
-    if (finalIdx >= 0) playableKeys.splice(finalIdx, 0, thirdPlaceKey)
-    else playableKeys.push(thirdPlaceKey)
+    playableKeys.push(thirdPlaceKey)
   }
   const timeline = buildMatchSlots(
     settings?.daily_schedule ?? [],
@@ -238,8 +244,105 @@ export async function generateKnockoutBracket(
     return { success: false, error: 'Não foi possível gerar o bracket.' }
   }
 
+  // Reagenda todas as finais do torneio para o fim, por `finals_order`.
+  await rescheduleFinals(supabase, phase.tournament_id)
+
   revalidatePath(`/tournaments/${phase.tournament_id}/phases`)
   return { success: true, data: { matches_created: rows.length } }
+}
+
+// ---------------------------------------------------------------------------
+// Agendamento das finais (fim do torneio, por ordem de escalão)
+// ---------------------------------------------------------------------------
+
+// Uma final é o jogo terminal do bracket: ronda 1, posição 0. (O jogo de 3.º
+// lugar vive na ronda 1 mas na posição reservada `THIRD_PLACE_POSITION`.)
+const FINAL_ROUND = 1
+const FINAL_POSITION = 0
+
+// Conta os jogos já agendados do torneio, excluindo as finais — base estável
+// para o agendamento, já que as finais são empurradas sempre para o fim.
+async function countScheduledNonFinals(
+  supabase: Supabase,
+  tournamentId: string
+): Promise<number> {
+  const { count: total } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_id', tournamentId)
+    .not('scheduled_at', 'is', null)
+
+  const { count: finals } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_id', tournamentId)
+    .not('scheduled_at', 'is', null)
+    .eq('bracket_round', FINAL_ROUND)
+    .eq('bracket_position', FINAL_POSITION)
+
+  return (total ?? 0) - (finals ?? 0)
+}
+
+interface FinalRow {
+  id: string
+  tier: Tier | null
+}
+
+// Coloca todas as finais das fases knockout do torneio no fim do calendário, por
+// `finals_order` (escalões fora da lista, ou sem escalão, vão para o fim por
+// TIER_ORDER). Idempotente: cada geração recoloca todas as finais na cauda.
+async function rescheduleFinals(
+  supabase: Supabase,
+  tournamentId: string
+): Promise<void> {
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('settings, finals_order')
+    .eq('id', tournamentId)
+    .maybeSingle()
+  const settings = (tournament?.settings ?? null) as Partial<TournamentSettings> | null
+  const finalsOrder = (tournament?.finals_order ?? []) as Tier[]
+
+  const { data: finalsData } = await supabase
+    .from('matches')
+    .select('id, phase:tournament_phases!matches_phase_id_fkey(tier)')
+    .eq('tournament_id', tournamentId)
+    .eq('bracket_round', FINAL_ROUND)
+    .eq('bracket_position', FINAL_POSITION)
+
+  const finals: FinalRow[] = (
+    (finalsData ?? []) as unknown as {
+      id: string
+      phase: { tier: Tier | null } | null
+    }[]
+  ).map((m) => ({ id: m.id, tier: m.phase?.tier ?? null }))
+  if (finals.length === 0) return
+
+  // Ordena por `finals_order`; escalões em falta (ou sem tier) ficam no fim,
+  // estáveis por TIER_ORDER.
+  const rank = (tier: Tier | null): number => {
+    if (!tier) return Number.MAX_SAFE_INTEGER
+    const i = finalsOrder.indexOf(tier)
+    return i >= 0 ? i : finalsOrder.length + TIER_ORDER[tier]
+  }
+  finals.sort((a, b) => rank(a.tier) - rank(b.tier))
+
+  const base = await countScheduledNonFinals(supabase, tournamentId)
+  const timeline = buildMatchSlots(
+    settings?.daily_schedule ?? [],
+    matchDurationMinutes(settings?.match),
+    MATCH_GAP_MINUTES,
+    base + finals.length
+  )
+
+  await Promise.all(
+    finals.map((f, i) =>
+      supabase
+        .from('matches')
+        .update({ scheduled_at: timeline[base + i] ?? null })
+        .eq('id', f.id)
+    )
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +482,9 @@ export async function resetKnockoutBracket(
   if (error) {
     return { success: false, error: 'Não foi possível refazer o bracket.' }
   }
+
+  // Recompacta as finais restantes para o fim, por `finals_order`.
+  await rescheduleFinals(supabase, phase.tournament_id)
 
   revalidatePath(`/tournaments/${phase.tournament_id}/phases`)
   return { success: true, data: undefined }

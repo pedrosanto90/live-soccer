@@ -4,6 +4,7 @@
 
 import type { MatchStatus } from '@/types/database'
 import type { BracketMatchRow, BracketTeamLite } from '@/lib/queries/bracket'
+import type { Tier } from '@/lib/tiers'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ export interface QualifiedTeam {
   color_secondary: string
   from_group: string // nome do grupo (ex.: "Grupo A")
   position: number // posição no grupo (1, 2, ...)
+  tier: Tier // escalão da equipa
 }
 
 export interface BracketSlot {

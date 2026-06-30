@@ -139,6 +139,7 @@ export function PhasesList({
 
       <PhaseDialog
         tournamentId={tournamentId}
+        multiTier={multiTier}
         open={createOpen}
         onOpenChange={setCreateOpen}
       />
