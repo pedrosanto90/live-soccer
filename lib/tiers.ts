@@ -22,6 +22,16 @@ export const TIER_ORDER: Record<Tier, number> = {
   benjamins: 3,
 }
 
+// Cor distinta por escalão para os pills/badges. Cada par é dark-aware. Usar
+// sempre via `TIER_BADGE_CLASSES[tier]` num `<Badge>` (sobrepõe o variant).
+export const TIER_BADGE_CLASSES: Record<Tier, string> = {
+  seniors: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  veterans: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  female: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300',
+  benjamins:
+    'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+}
+
 // Ordena escalões pela ordem definida em TIER_ORDER.
 export function sortTiers(tiers: Tier[]): Tier[] {
   return [...tiers].sort((a, b) => TIER_ORDER[a] - TIER_ORDER[b])

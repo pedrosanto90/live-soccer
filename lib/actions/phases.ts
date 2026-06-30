@@ -78,6 +78,33 @@ async function phaseIdOfGroup(
   return data?.phase_id ?? null
 }
 
+// Escalões já sorteados numa fase de grupos (inferidos das equipas presentes nos
+// grupos existentes). Suporta o sorteio incremental: sortear apenas escalões
+// acrescentados depois do sorteio inicial, sem mexer nos já feitos.
+async function drawnTiersForPhase(
+  supabase: Supabase,
+  phaseId: string
+): Promise<Set<Tier>> {
+  const { data: groups } = await supabase
+    .from('groups')
+    .select('id')
+    .eq('phase_id', phaseId)
+  const groupIds = (groups ?? []).map((g) => g.id)
+  if (groupIds.length === 0) return new Set()
+
+  const { data } = await supabase
+    .from('group_teams')
+    .select('teams(tier)')
+    .in('group_id', groupIds)
+
+  const rows = (data ?? []) as unknown as { teams: { tier: Tier } | null }[]
+  const tiers = new Set<Tier>()
+  for (const row of rows) {
+    if (row.teams?.tier) tiers.add(row.teams.tier)
+  }
+  return tiers
+}
+
 // Resolve utilizador + papel admin a partir de um phaseId. Devolve o erro a
 // propagar (ou null) e o tournament_id quando autorizado.
 async function requireAdminForPhase(
@@ -408,16 +435,24 @@ export async function runDraw(
     return { success: false, error: 'O sorteio só se aplica a fases de grupos.' }
   }
 
-  // O sorteio ainda não pode ter sido feito (não há grupos nesta fase).
-  const { count: existingGroups } = await supabase
+  // Se a fase já tem grupos, só é permitido o sorteio incremental por escalão
+  // (torneio multi-escalão): sortear escalões acrescentados depois do sorteio
+  // inicial. No caso mono-escalão, refazer o sorteio é a única via.
+  const { count: existingGroupsRaw } = await supabase
     .from('groups')
     .select('id', { count: 'exact', head: true })
     .eq('phase_id', phaseId)
-  if ((existingGroups ?? 0) > 0) {
-    return {
-      success: false,
-      error: 'O sorteio já foi feito. Refá-lo para voltar a sortear.',
+  const existingGroups = existingGroupsRaw ?? 0
+
+  let alreadyDrawnTiers = new Set<Tier>()
+  if (existingGroups > 0) {
+    if (!cfg.tiers || cfg.tiers.length === 0) {
+      return {
+        success: false,
+        error: 'O sorteio já foi feito. Refá-lo para voltar a sortear.',
+      }
     }
+    alreadyDrawnTiers = await drawnTiersForPhase(supabase, phaseId)
   }
 
   // Carrega todas as equipas do torneio (com o escalão para o sorteio
@@ -440,7 +475,15 @@ export async function runDraw(
   // array ordenado — o round-robin nunca cruza grupos, logo nem escalões.
   let drawn: DrawGroup[]
   if (cfg.tiers && cfg.tiers.length > 0) {
-    const tierConfigs = [...cfg.tiers].sort(
+    // No sorteio incremental, ignora escalões já sorteados nesta fase.
+    const pendingTiers = cfg.tiers.filter((t) => !alreadyDrawnTiers.has(t.tier))
+    if (pendingTiers.length === 0) {
+      return {
+        success: false,
+        error: 'Os escalões selecionados já foram sorteados.',
+      }
+    }
+    const tierConfigs = [...pendingTiers].sort(
       (a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]
     )
     drawn = []
@@ -479,7 +522,11 @@ export async function runDraw(
   const { data: createdGroups, error: groupsError } = await supabase
     .from('groups')
     .insert(
-      drawn.map((g, i) => ({ phase_id: phaseId, name: g.name, order_index: i }))
+      drawn.map((g, i) => ({
+        phase_id: phaseId,
+        name: g.name,
+        order_index: existingGroups + i,
+      }))
     )
     .select('*')
 

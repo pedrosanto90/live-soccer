@@ -96,6 +96,20 @@ export function PhaseCard({
   const status = phaseStatus(phase)
   const drawn = phase.type === 'group' && phase.groups.length > 0
 
+  // Sorteio incremental: escalões com equipas inscritas que ainda não têm grupos
+  // nesta fase. Permite sortear um escalão acrescentado depois do sorteio
+  // inicial sem refazer o que já está feito.
+  const tierByTeamId = new Map(teams.map((t) => [t.id, t.tier]))
+  const drawnTiers = new Set<Tier>()
+  for (const group of phase.groups) {
+    for (const team of group.teams) {
+      const tier = tierByTeamId.get(team.id)
+      if (tier) drawnTiers.add(tier)
+    }
+  }
+  const pendingTierTeams = teams.filter((t) => !drawnTiers.has(t.tier))
+  const hasPendingTiers = multiTier && pendingTierTeams.length > 0
+
   const subtitle =
     phase.type === 'group'
       ? `${phase.groups.length} grupo(s)`
@@ -198,12 +212,23 @@ export function PhaseCard({
       {expanded ? (
         phase.type === 'group' ? (
           drawn ? (
-            <GroupsGrid
-              phaseId={phase.id}
-              groups={phase.groups}
-              matchesCount={phase.matches_count}
-              canReset={isAdmin && phase.can_reset}
-            />
+            <>
+              <GroupsGrid
+                phaseId={phase.id}
+                groups={phase.groups}
+                matchesCount={phase.matches_count}
+                canReset={isAdmin && phase.can_reset}
+              />
+              {isAdmin && hasPendingTiers ? (
+                <DrawPanel
+                  phaseId={phase.id}
+                  tournamentId={tournamentId}
+                  teams={pendingTierTeams}
+                  multiTier
+                  incremental
+                />
+              ) : null}
+            </>
           ) : isAdmin ? (
             <DrawPanel
               phaseId={phase.id}

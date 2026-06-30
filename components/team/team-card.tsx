@@ -7,7 +7,7 @@ import { MoreHorizontal, Pencil, Eye, Trash2 } from 'lucide-react'
 
 import { deleteTeam } from '@/lib/actions/teams'
 import type { TeamWithCount } from '@/lib/queries/teams'
-import { TIER_LABELS } from '@/lib/tiers'
+import { TIER_LABELS, TIER_BADGE_CLASSES } from '@/lib/tiers'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -97,7 +97,7 @@ export function TeamCard({
               {team.player_count} jogador(es)
             </p>
             {multiTier ? (
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge className={`text-[10px] ${TIER_BADGE_CLASSES[team.tier]}`}>
                 {TIER_LABELS[team.tier]}
               </Badge>
             ) : null}

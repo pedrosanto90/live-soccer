@@ -25,7 +25,6 @@ import { runDraw } from '@/lib/actions/phases'
 import type { DrawConfigInput } from '@/lib/validations/phase'
 import {
   TIER_LABELS,
-  TIER_ORDER,
   getUniqueTiers,
   type Tier,
 } from '@/lib/tiers'
@@ -49,13 +48,22 @@ interface DrawPanelProps {
   teams: TierTeam[]
   // Torneio multi-escalão: o sorteio é configurado e executado por escalão.
   multiTier?: boolean
+  // Sorteio incremental: a fase já tem grupos sorteados e este painel cobre
+  // apenas os escalões ainda por sortear (só faz sentido em multiTier).
+  incremental?: boolean
 }
 
 type Mode = 'random' | 'seeded'
 
 export function DrawPanel(props: DrawPanelProps) {
   if (props.multiTier) {
-    return <MultiTierDrawPanel phaseId={props.phaseId} teams={props.teams} />
+    return (
+      <MultiTierDrawPanel
+        phaseId={props.phaseId}
+        teams={props.teams}
+        incremental={props.incremental}
+      />
+    )
   }
   return <SingleDrawPanel phaseId={props.phaseId} teams={props.teams} />
 }
@@ -337,18 +345,22 @@ interface TierConfig {
 }
 
 // Painel de sorteio para torneios multi-escalão. Cada escalão com equipas tem a
-// sua própria configuração (nº de grupos × equipas por grupo). O sorteio é
-// sempre aleatório e executa todos os escalões de uma vez. As equipas de
-// escalões diferentes nunca se misturam.
+// sua própria configuração (nº de grupos × equipas por grupo) e é sorteado de
+// forma independente — um escalão de cada vez, sempre de forma aleatória. As
+// equipas de escalões diferentes nunca se misturam.
 function MultiTierDrawPanel({
   phaseId,
   teams,
+  incremental = false,
 }: {
   phaseId: string
   teams: TierTeam[]
+  incremental?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Escalão actualmente a ser sorteado (para o spinner/disable do botão certo).
+  const [runningTier, setRunningTier] = useState<Tier | null>(null)
 
   // Escalões presentes nas equipas inscritas, por ordem de TIER_ORDER.
   const tiers = useMemo(() => getUniqueTiers(teams), [teams])
@@ -391,38 +403,47 @@ function MultiTierDrawPanel({
     }
   })
 
-  const canRun = tiers.length > 0 && validations.every((v) => v.result.valid)
-
-  function handleRunDraw() {
-    if (!canRun) return
+  // Sorteia um único escalão. Os restantes ficam por sortear até o utilizador
+  // os sortear também (a action faz append e ignora escalões já sorteados).
+  function handleRunTier(tier: Tier) {
+    const v = validations.find((x) => x.tier === tier)
+    if (!v?.result.valid || isPending) return
+    const cfg = cfgOf(tier)
     const config: DrawConfigInput = {
-      tiers: tiers
-        .slice()
-        .sort((a, b) => TIER_ORDER[a] - TIER_ORDER[b])
-        .map((tier) => ({
+      tiers: [
+        {
           tier,
           mode: 'random' as const,
-          num_groups: cfgOf(tier).num_groups,
-          teams_per_group: cfgOf(tier).teams_per_group,
-        })),
+          num_groups: cfg.num_groups,
+          teams_per_group: cfg.teams_per_group,
+        },
+      ],
     }
 
+    setRunningTier(tier)
     startTransition(async () => {
       const result = await runDraw(phaseId, config)
       if (result.success) {
         toast.success(
-          `Sorteio efectuado — ${result.data.matches_created} jogo(s) gerado(s).`
+          `${TIER_LABELS[tier]} sorteado — ${result.data.matches_created} jogo(s) gerado(s).`
         )
         router.refresh()
       } else {
         toast.error(result.error)
       }
+      setRunningTier(null)
     })
   }
 
   return (
     <div className="flex flex-col gap-4 border-t border-border p-4">
-      <Section title="Configuração do sorteio por escalão">
+      <Section
+        title={
+          incremental
+            ? 'Sortear escalões em falta'
+            : 'Configuração do sorteio por escalão'
+        }
+      >
         <div className="flex flex-col gap-4">
           {tiers.map((tier) => {
             const v = validations.find((x) => x.tier === tier)!
@@ -468,6 +489,20 @@ function MultiTierDrawPanel({
                     {v.count})
                   </p>
                 )}
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={!v.result.valid || isPending}
+                  onClick={() => handleRunTier(tier)}
+                  data-testid={`draw-run-${tier}`}
+                >
+                  {runningTier === tier && (
+                    <Loader2 className="size-4 animate-spin" />
+                  )}
+                  {runningTier === tier
+                    ? 'A sortear...'
+                    : `Sortear ${TIER_LABELS[tier]}`}
+                </Button>
               </div>
             )
           })}
@@ -478,17 +513,6 @@ function MultiTierDrawPanel({
           ) : null}
         </div>
       </Section>
-
-      <Button
-        type="button"
-        className="w-full"
-        disabled={!canRun || isPending}
-        onClick={handleRunDraw}
-        data-testid="draw-run"
-      >
-        {isPending && <Loader2 className="size-4 animate-spin" />}
-        {isPending ? 'A sortear...' : 'Executar sorteio'}
-      </Button>
     </div>
   )
 }
