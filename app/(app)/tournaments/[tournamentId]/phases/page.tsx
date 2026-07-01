@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/queries/auth'
 import { getTournamentById } from '@/lib/queries/tournaments'
 import { getPhasesByTournament } from '@/lib/queries/phases'
 import type { Tier } from '@/lib/tiers'
@@ -18,29 +19,33 @@ export default async function PhasesPage({
   const { tournamentId } = await params
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
-  let isAdmin = false
-  if (user) {
+  // Lança já as queries independentes do utilizador para correrem em paralelo
+  // com a resolução do user + membership (que são sequenciais entre si).
+  const tournamentPromise = getTournamentById(tournamentId)
+  const phasesPromise = getPhasesByTournament(tournamentId)
+  const teamsPromise = supabase
+    .from('teams')
+    .select('id, name, tier')
+    .eq('tournament_id', tournamentId)
+    .order('name', { ascending: true })
+
+  const adminPromise = getCurrentUser().then(async (user) => {
+    if (!user) return false
     const { data: membership } = await supabase
       .from('tournament_members')
       .select('role')
       .eq('tournament_id', tournamentId)
       .eq('profile_id', user.id)
       .maybeSingle()
-    isAdmin = membership?.role === 'admin'
-  }
+    return membership?.role === 'admin'
+  })
 
-  const [tournament, phases, teamsData] = await Promise.all([
-    getTournamentById(tournamentId),
-    getPhasesByTournament(tournamentId),
-    supabase
-      .from('teams')
-      .select('id, name, tier')
-      .eq('tournament_id', tournamentId)
-      .order('name', { ascending: true }),
+  const [tournament, phases, teamsData, isAdmin] = await Promise.all([
+    tournamentPromise,
+    phasesPromise,
+    teamsPromise,
+    adminPromise,
   ])
 
   const teams = (teamsData.data ?? []) as {

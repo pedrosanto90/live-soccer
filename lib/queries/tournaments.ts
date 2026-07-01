@@ -1,3 +1,5 @@
+import { cache } from 'react'
+
 import { createClient } from '@/lib/supabase/server'
 import type { MatchStatus, Tournament, TournamentStatus } from '@/types/database'
 
@@ -93,19 +95,19 @@ export async function getTournamentsByUser(
 
 // Torneio por id, para páginas de admin. O RLS garante o acesso — devolve
 // null se o utilizador não tiver permissão ou o torneio não existir.
-export async function getTournamentById(
-  id: string
-): Promise<Tournament | null> {
-  const supabase = await createClient()
+export const getTournamentById = cache(
+  async (id: string): Promise<Tournament | null> => {
+    const supabase = await createClient()
 
-  const { data } = await supabase
-    .from('tournaments')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle()
+    const { data } = await supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
 
-  return data ?? null
-}
+    return data ?? null
+  }
+)
 
 // Torneio por slug, para páginas públicas. Inclui o perfil do criador,
 // as fases e os grupos.

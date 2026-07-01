@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/queries/auth'
 import { Navbar } from '@/components/shared/navbar'
 
 export default async function AppLayout({
@@ -8,14 +9,13 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getCurrentUser()
 
   if (!user) {
     redirect('/login')
   }
+
+  const supabase = await createClient()
 
   const { data: profile } = await supabase
     .from('profiles')
